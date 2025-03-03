@@ -8,18 +8,40 @@ const Login = () => {
     email: '',
     password: ''
   });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+    setLoading(true);
+    
     try {
       const response = await axios.post('http://localhost:4000/api/auth/login', formData);
-      console.log(response)
-      // Store token, redirect, etc.
+      // Store token and user info
       localStorage.setItem('token', response.data.token);
+      
+      // Always store the email for the navbar
+      localStorage.setItem('userEmail', formData.email);
+      
+      // Store user info if available in the response
+      if (response.data.user) {
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+      } else {
+        // If no user object in response, create a basic one with the email
+        localStorage.setItem('user', JSON.stringify({ email: formData.email }));
+      }
+      
+      // Redirect to home page
       navigate('/');
+      
+      // Refresh the page to update navbar state
+      window.location.reload();
     } catch (error) {
-      // Handle login error
       console.error('Login failed', error);
+      setError(error.response?.data?.message || 'Login failed. Please check your credentials.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -31,6 +53,11 @@ const Login = () => {
             Sign in to your account
           </h2>
         </div>
+        {error && (
+          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4" role="alert">
+            <p>{error}</p>
+          </div>
+        )}
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
@@ -57,9 +84,10 @@ const Login = () => {
           <div>
             <button
               type="submit"
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              disabled={loading}
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400"
             >
-              Sign in
+              {loading ? 'Signing in...' : 'Sign in'}
             </button>
           </div>
         </form>
