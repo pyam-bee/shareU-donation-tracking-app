@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
@@ -10,6 +10,78 @@ const Login = () => {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Load the Google Sign-In API script
+    const loadGoogleScript = () => {
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      document.body.appendChild(script);
+      
+      script.onload = () => {
+        initializeGoogleSignIn();
+      };
+    };
+    
+    loadGoogleScript();
+  }, []);
+
+  const initializeGoogleSignIn = () => {
+    if (window.google) {
+      window.google.accounts.id.initialize({
+        client_id: '774871976972-hjmokve6ao787onptt7gdf2b5ch8kgs8.apps.googleusercontent.com',
+        callback: handleGoogleSignIn
+      });
+      
+      window.google.accounts.id.renderButton(
+        document.getElementById('googleSignInButton'),
+        { theme: 'outline', size: 'large', width: '100%' }
+      );
+    }
+  };
+
+  const handleGoogleSignIn = async (response) => {
+    setLoading(true);
+    try {
+      // Decode the JWT token to extract user info including profile picture
+      const jwtToken = response.credential;
+      const payload = JSON.parse(atob(jwtToken.split('.')[1]));
+      
+      // Extract profile picture URL from token payload
+      const profilePicture = payload.picture || '';
+      
+      // Send the ID token to your backend
+      const googleResponse = await axios.post('http://localhost:4000/api/auth/google-signin', {
+        token: response.credential
+      });
+      
+      // Store token and user info
+      localStorage.setItem('token', googleResponse.data.token);
+      localStorage.setItem('userEmail', googleResponse.data.user.email);
+      
+      // Create enhanced user object with profile picture
+      const enhancedUser = {
+        ...googleResponse.data.user,
+        profilePicture: profilePicture // Add profile picture to user object
+      };
+      
+      // Store enhanced user info
+      localStorage.setItem('user', JSON.stringify(enhancedUser));
+      
+      // Redirect to home page
+      navigate('/');
+      
+      // Refresh the page to update navbar state
+      window.location.reload();
+    } catch (error) {
+      console.error('Google login failed', error);
+      setError(error.response?.data?.message || 'Google login failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -89,6 +161,19 @@ const Login = () => {
             >
               {loading ? 'Signing in...' : 'Sign in'}
             </button>
+          </div>
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-gray-50 text-gray-500">Or continue with</span>
+              </div>
+            </div>
+            <div className="mt-6">
+              <div id="googleSignInButton" className="w-full flex justify-center"></div>
+            </div>
           </div>
         </form>
       </div>

@@ -8,6 +8,7 @@ const Navbar = () => {
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [userEmail, setUserEmail] = useState('');
+  const [profilePicture, setProfilePicture] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -23,6 +24,8 @@ const Navbar = () => {
         setUser(parsedUser);
         // Set email from user data or from localStorage directly
         setUserEmail(parsedUser.email || localStorage.getItem('userEmail') || '');
+        // Set profile picture if available
+        setProfilePicture(parsedUser.profilePicture || '');
       } catch (error) {
         console.error('Error parsing user data:', error);
         // Try to get email directly if parsing failed
@@ -41,11 +44,12 @@ const Navbar = () => {
     setIsLoggedIn(false);
     setUser(null);
     setUserEmail('');
+    setProfilePicture('');
     setUserDropdownOpen(false);
     navigate('/');
   };
 
-  // Function to get user initials for avatar
+  // Function to get user initials for avatar fallback
   const getUserInitials = () => {
     if (user && user.name) {
       const nameParts = user.name.split(' ');
@@ -75,7 +79,7 @@ const Navbar = () => {
         <div className="flex justify-between h-16">
           <div className="flex items-center">
             <Link to="/" className="flex-shrink-0 flex items-center">
-              <img src={logoimg} alt="ShareU-Logo" className='h-16 w-50'/>
+              <img src={logoimg} alt="ShareU-Logo" className="h-16 w-50"/>
             </Link>
           </div>
 
@@ -99,12 +103,22 @@ const Navbar = () => {
                 
                 {/* User profile dropdown */}
                 <div className="ml-3 relative flex items-center">
-                  {/* User initials circle */}
+                  {/* User avatar - profile picture or initials */}
                   <div 
-                    className="h-9 w-9 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium border-2 border-white shadow-sm cursor-pointer"
+                    className="h-9 w-9 rounded-full flex items-center justify-center text-white font-medium border-2 border-white shadow-sm cursor-pointer overflow-hidden"
                     onClick={() => setUserDropdownOpen(!userDropdownOpen)}
                   >
-                    {getUserInitials()}
+                    {profilePicture ? (
+                      <img 
+                        src={profilePicture} 
+                        alt="Profile" 
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-full w-full bg-blue-600 flex items-center justify-center">
+                        {getUserInitials()}
+                      </div>
+                    )}
                   </div>
                   
                   {/* Dropdown toggle button */}
@@ -126,12 +140,30 @@ const Navbar = () => {
                   {userDropdownOpen && (
                     <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 z-10 top-10">
                       <div className="px-4 py-3 border-b border-gray-100">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {getUserDisplayName()}
-                        </p>
-                        <p className="text-xs text-gray-500 truncate mt-1">
-                          {userEmail || "No email available"}
-                        </p>
+                        <div className="flex items-center space-x-3">
+                          {/* Profile picture in dropdown menu */}
+                          <div className="h-10 w-10 rounded-full overflow-hidden">
+                            {profilePicture ? (
+                              <img 
+                                src={profilePicture} 
+                                alt="Profile" 
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="h-full w-full bg-blue-600 flex items-center justify-center text-white">
+                                {getUserInitials()}
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {getUserDisplayName()}
+                            </p>
+                            <p className="text-xs text-gray-500 truncate mt-1">
+                              {userEmail || "No email available"}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                       
                       <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
@@ -166,23 +198,51 @@ const Navbar = () => {
           <div className="flex items-center sm:hidden">
             {isLoggedIn && (
               <div className="mr-2">
-                {/* User initials circle for mobile */}
+                {/* User avatar for mobile */}
                 <div 
-                  className="h-9 w-9 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium border-2 border-white shadow-sm cursor-pointer"
+                  className="h-9 w-9 rounded-full flex items-center justify-center text-white font-medium border-2 border-white shadow-sm cursor-pointer overflow-hidden"
                   onClick={() => setUserDropdownOpen(!userDropdownOpen)}
                 >
-                  {getUserInitials()}
+                  {profilePicture ? (
+                    <img 
+                      src={profilePicture} 
+                      alt="Profile" 
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="h-full w-full bg-blue-600 flex items-center justify-center">
+                      {getUserInitials()}
+                    </div>
+                  )}
                 </div>
                 
                 {userDropdownOpen && (
                   <div className="origin-top-right absolute right-16 mt-2 w-56 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 z-10">
                     <div className="px-4 py-3 border-b border-gray-100">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {getUserDisplayName()}
-                      </p>
-                      <p className="text-xs text-gray-500 truncate mt-1">
-                        {userEmail || "No email available"}
-                      </p>
+                      <div className="flex items-center space-x-3">
+                        {/* Profile picture in mobile dropdown */}
+                        <div className="h-10 w-10 rounded-full overflow-hidden">
+                          {profilePicture ? (
+                            <img 
+                              src={profilePicture} 
+                              alt="Profile" 
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="h-full w-full bg-blue-600 flex items-center justify-center text-white">
+                              {getUserInitials()}
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {getUserDisplayName()}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate mt-1">
+                            {userEmail || "No email available"}
+                          </p>
+                        </div>
+                      </div>
                     </div>
                     
                     <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">

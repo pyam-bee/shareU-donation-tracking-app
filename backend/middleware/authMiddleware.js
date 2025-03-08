@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import User from "../entities/User.js";
 
-const authMiddleware = async (req, res, next) => {
+export const protect = async (req, res, next) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) return res.status(401).json({ message: "Unauthorized" });
@@ -18,4 +18,15 @@ const authMiddleware = async (req, res, next) => {
   }
 };
 
-export default authMiddleware;
+export const restrictTo = (...roles) => {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ 
+        message: "You do not have permission to perform this action"
+      });
+    }
+    next();
+  };
+};
+
+export default { protect, restrictTo };
