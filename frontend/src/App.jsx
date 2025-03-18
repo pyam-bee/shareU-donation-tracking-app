@@ -6,6 +6,8 @@ import Login from './Pages/Login';
 import SignUp from './Pages/Signup';
 import Donations from './Pages/Donations';
 import CampaignApplication from './Pages/CampaignApplication';
+import Contact from './Pages/Contact';
+import Dashboard from './Pages/Dashboard';
 
 const App = () => {
   return (
@@ -17,6 +19,8 @@ const App = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<SignUp />} />
           <Route path="/donations" element={<Donations />} />
+          <Route path='/contact' element={<Contact />}/>
+          <Route path='/dashboard' element={<Dashboard />}/>
           <Route path='/campaigns' element={<CampaignApplication />}/>
         </Routes>
       </div>
