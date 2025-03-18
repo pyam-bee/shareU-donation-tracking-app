@@ -1,11 +1,9 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import Home from './Pages/Home';
-import Navbar from './Components/Navbar';
+import Navbar from './components/Navbar';
 import Login from './Pages/Login';
 import SignUp from './Pages/Signup';
-import Donations from './Pages/Donations';
-import CampaignApplication from './Pages/CampaignApplication';
+import Home from './Pages/Home';
 
 const App = () => {
   return (
@@ -13,11 +11,9 @@ const App = () => {
       <div className="min-h-screen bg-gray-50">
         <Navbar />
         <Routes>
-          <Route path='/' element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<SignUp />} />
-          <Route path="/donations" element={<Donations />} />
-          <Route path='/campaigns' element={<CampaignApplication />}/>
+          <Route path="/" element={<Home />} />
         </Routes>
       </div>
     </BrowserRouter>

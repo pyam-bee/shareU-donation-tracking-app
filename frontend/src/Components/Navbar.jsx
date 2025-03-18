@@ -91,6 +91,9 @@ const Navbar = () => {
             <Link to="/donations" className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
               Donations
             </Link>
+            <Link to="/campaigns" className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
+              Campaigns
+            </Link>
             <Link to="/contact" className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
               Contact
             </Link>
@@ -168,6 +171,12 @@ const Navbar = () => {
                       
                       <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                         Your Profile
+                      </Link>
+                      <Link to="/my-campaigns" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                        My Campaigns
+                      </Link>
+                      <Link to="/create-campaign" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                        Create Campaign
                       </Link>
                       <Link to="/settings" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                         Settings
@@ -248,6 +257,12 @@ const Navbar = () => {
                     <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                       Your Profile
                     </Link>
+                    <Link to="/my-campaigns" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                      My Campaigns
+                    </Link>
+                    <Link to="/create-campaign" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                      Create Campaign
+                    </Link>
                     <Link to="/settings" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                       Settings
                     </Link>
@@ -298,6 +313,9 @@ const Navbar = () => {
           <Link to="/donations" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
             Donations
           </Link>
+          <Link to="/campaigns" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
+            Campaigns
+          </Link>
           <Link to="/contact" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
             Contact
           </Link>
@@ -309,6 +327,12 @@ const Navbar = () => {
               </Link>
               <Link to="/profile" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
                 Profile
+              </Link>
+              <Link to="/my-campaigns" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
+                My Campaigns
+              </Link>
+              <Link to="/create-campaign" className="block px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
+                Create Campaign
               </Link>
               <button
                 onClick={handleLogout}
