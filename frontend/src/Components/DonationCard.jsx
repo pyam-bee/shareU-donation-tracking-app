@@ -1,117 +1,116 @@
 import React, { useState } from 'react';
-import axios from 'axios';
 
 const DonationCard = ({ donation, onDonate }) => {
   const [donationAmount, setDonationAmount] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const progressPercentage = (donation.currentAmount / donation.targetAmount) * 100;
+  // Calculate progress percentage
+  const progressPercentage = (donation.currentAmount / donation.goalAmount) * 100;
   
-  const handleDonateClick = () => {
-    setIsModalOpen(true);
+  // Format date
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
   };
   
-  const handleSubmitDonation = async () => {
-    if (!donationAmount || isNaN(donationAmount) || donationAmount <= 0) {
+  // Handle donation submit
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!donationAmount || isNaN(donationAmount) || parseFloat(donationAmount) <= 0) {
       alert('Please enter a valid donation amount');
       return;
     }
     
-    await onDonate(donation.id, parseFloat(donationAmount));
-    setDonationAmount('');
-    setIsModalOpen(false);
+    setIsSubmitting(true);
+    
+    try {
+      await onDonate(donation.id, donationAmount);
+      setDonationAmount(''); // Reset form after successful donation
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden">
-      {/* Donation image */}
-      <div className="h-48 bg-gray-200 flex items-center justify-center">
-        {donation.imageUrl ? (
-          <img 
-            src={donation.imageUrl} 
-            alt={donation.title} 
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <span className="text-gray-500">Donation Image</span>
-        )}
+    <div className="bg-white rounded-lg overflow-hidden shadow-lg border border-gray-200">
+      {/* Image */}
+      <div className="relative h-48 bg-gray-200">
+        <img 
+          src={donation.imageUrl || "/api/placeholder/400/300"} 
+          alt={donation.title}
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute top-3 right-3 bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded">
+          {donation.category}
+        </div>
       </div>
       
-      <div className="p-4">
-        <div className="flex justify-between items-center mb-2">
-          <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
-            {donation.category}
-          </span>
-          <span className="text-sm text-gray-600">By {donation.creator}</span>
-        </div>
+      {/* Content */}
+      <div className="p-5">
+        <h3 className="text-xl font-bold text-gray-900 mb-2">{donation.title}</h3>
         
-        <h3 className="text-lg font-semibold mb-2">{donation.title}</h3>
-        <p className="text-gray-600 text-sm mb-4">{donation.description}</p>
+        <p className="text-gray-600 mb-4 line-clamp-3">{donation.description}</p>
         
         {/* Progress bar */}
-        <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
-          <div 
-            className="bg-blue-600 h-2.5 rounded-full" 
-            style={{ width: `${Math.min(progressPercentage, 100)}%` }}
-          ></div>
+        <div className="mb-4">
+          <div className="flex justify-between text-sm text-gray-600 mb-1">
+            <span>${donation.currentAmount.toLocaleString()} raised</span>
+            <span>Goal: ${donation.goalAmount.toLocaleString()}</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div 
+              className="bg-blue-600 h-2 rounded-full" 
+              style={{ width: `${Math.min(progressPercentage, 100)}%` }}
+            ></div>
+          </div>
+          <div className="flex justify-between text-xs text-gray-500 mt-1">
+            <span>{donation.donors} donors</span>
+            {donation.endDate && (
+              <span>Ends: {formatDate(donation.endDate)}</span>
+            )}
+          </div>
         </div>
         
-        <div className="flex justify-between text-sm mb-4">
-          <span className="font-medium">
-            {donation.currentAmount} ETH raised
-          </span>
-          <span className="text-gray-600">
-            Target: {donation.targetAmount} ETH
-          </span>
-        </div>
-        
-        <div className="flex justify-between items-center">
-          <span className="text-sm text-gray-600">{donation.donors} donors</span>
-          <button 
-            onClick={handleDonateClick}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded"
-          >
-            Donate
-          </button>
-        </div>
-      </div>
-      
-      {/* Donation Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg max-w-md w-full">
-            <h3 className="text-xl font-semibold mb-4">Donate to {donation.title}</h3>
-            
-            <div className="mb-4">
-              <label className="block text-gray-700 mb-2">Amount (ETH)</label>
+        {/* Donation form */}
+        <form onSubmit={handleSubmit} className="mt-4">
+          <div className="flex">
+            <div className="relative flex-grow">
+              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
               <input
                 type="number"
                 value={donationAmount}
                 onChange={(e) => setDonationAmount(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded"
-                placeholder="0.00"
+                placeholder="Amount"
+                className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-l-lg focus:ring-blue-500 focus:border-blue-500"
                 step="0.01"
                 min="0"
               />
             </div>
-            
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSubmitDonation}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                Confirm
-              </button>
-            </div>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-4 py-2 bg-blue-600 text-white font-medium rounded-r-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+            >
+              {isSubmitting ? (
+                <span className="flex items-center">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Donating...
+                </span>
+              ) : (
+                'Donate'
+              )}
+            </button>
           </div>
-        </div>
-      )}
+        </form>
+      </div>
     </div>
   );
 };

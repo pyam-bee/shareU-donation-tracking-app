@@ -8,6 +8,7 @@ import Donations from './Pages/Donations';
 import CampaignApplication from './Pages/CampaignApplication';
 import Contact from './Pages/Contact';
 import Dashboard from './Pages/Dashboard';
+import AdminDashboard from './Pages/Admin';
 
 const App = () => {
   return (
@@ -22,6 +23,7 @@ const App = () => {
           <Route path='/contact' element={<Contact />}/>
           <Route path='/dashboard' element={<Dashboard />}/>
           <Route path='/campaigns' element={<CampaignApplication />}/>
+          <Route path='/admin' element={<AdminDashboard />}/>
         </Routes>
       </div>
     </BrowserRouter>

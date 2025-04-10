@@ -2,7 +2,7 @@ import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import authRoutes from "./routes/authRoutes.js";
-import donationRoutes from "./routes/donationsRoutes.js";
+// import donationRoutes from "./routes/donationsRoutes.js";
 import "dotenv/config";
 
 const app = express();
@@ -22,7 +22,7 @@ mongoose.connect(process.env.MONGO_URI, {
 
 // Routes
 app.use("/api/auth", authRoutes);
-app.use("/api/donations", donationRoutes);
+// app.use("/api/donations", donationRoutes);
 console.log(process.env.MONGO_URI)
 
 app.listen(port, () => {

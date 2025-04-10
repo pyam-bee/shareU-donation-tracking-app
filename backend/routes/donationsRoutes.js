@@ -1,5 +1,14 @@
-import express from "express";
+// import express from 'express';
+// import {
+//   getDonationPage,
+//   processDonation,
+//   getDonationStats
+// } from '../controllers/donationController.js';
 
-const router = express.Router();
+// const router = express.Router();
 
-export default router;
+// router.get('/page/:slug', getDonationPage);
+// router.post('/process', processDonation);
+// router.get('/stats/:campaignId', getDonationStats);
+
+// export default router;

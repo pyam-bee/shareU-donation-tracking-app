@@ -1,138 +1,85 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import DonationCard from '../Components/DonationCard';
+import MetaMaskConnect from '../Components/MetaMaskConnect';
+import { ethereumService } from '../services/ethereumService';
 
-const Home = () => {
-  const [donations, setDonations] = useState([
-    {
-        id: 1,
-        title: "Help Local Food Bank",
-        description: "Support our community food bank in providing meals to families in need.",
-        currentAmount: 1.5,
-        targetAmount: 5,
-        category: "Community",
-        creator: "0x1234...5678",
-        donors: 12,
-        imageUrl: "https://images.unsplash.com/photo-1593113630400-ea4288922497?auto=format&fit=crop&q=80&w=2070"
-    },
-    {
-        id: 2,
-        title: "Help the Victims",
-        description: "Support our community food bank in providing meals to families in need.",
-        currentAmount: 3.5,
-        targetAmount: 5,
-        category: "Social Worker",
-        creator: "Suporters",
-        donors: 35,
-        imageUrl: "https://images.unsplash.com/photo-1532629345422-7515f3d16bb6?auto=format&fit=crop&q=80&w=2070"
-    },
-    {
-        id: 3,
-        title: "Support for Recovery",
-        description: "Join us in providing essential aid and resources to those in need. Every contribution makes a difference!",
-        currentAmount: 7.5,
-        targetAmount: 20,
-        category: "Donator",
-        creator: "Humad",
-        donors: 50,
-        imageUrl: "https://images.unsplash.com/photo-1638352096026-2db043f87d7a?auto=format&fit=crop&q=80&w=2952"
-    },
-    {
-        id: 4,
-        title: "Rebuilding Lives Together",
-        description: "Help rebuild communities by contributing to this cause. Your support matters more than ever.",
-        currentAmount: 20,
-        targetAmount: 40,
-        category: "Relief Fund",
-        creator: "HopeInitiative",
-        donors: 42,
-        imageUrl: "https://images.unsplash.com/photo-1532629345422-7515f3d16bb6?auto=format&fit=crop&q=80&w=2070"
-    },
-    {
-        id: 5,
-        title: "Aid for a Brighter Future",
-        description: "Your generosity can light the way for families in crisis. Join us in making an impact.",
-        currentAmount: 7.5,
-        targetAmount: 100,
-        category: "Humanitarian",
-        creator: "FutureAid",
-        donors: 60,
-        imageUrl: "https://images.unsplash.com/photo-1637909947197-a77fcd7d7b7a?auto=format&fit=crop&q=80&w=2070"
-    },
-    {
-        id: 6,
-        title: "Together for Change",
-        description: "Let's unite to bring hope and help to those facing hardships. Every dollar counts.",
-        currentAmount: 450,
-        targetAmount: 400,
-        category: "Community Support",
-        creator: "CareAlliance",
-        donors: 214,
-        imageUrl: "https://images.unsplash.com/photo-1593113630400-ea4288922497?auto=format&fit=crop&q=80&w=2070"
-    },
-    {
-        id: 7,
-        title: "Hands of Hope",
-        description: "Extend a helping hand to those in urgent need. Your contribution brings immediate relief.",
-        currentAmount: 10.75,
-        targetAmount: 200,
-        category: "Emergency Assistance",
-        creator: "ReliefPartners",
-        donors: 48,
-        imageUrl: "https://images.unsplash.com/photo-1638352096026-2db043f87d7a?auto=format&fit=crop&q=80&w=2952"
-    },
-    {
-        id: 8,
-        title: "Lend a Helping Hand",
-        description: "Be a part of changing lives by supporting this critical mission. Your help goes a long way.",
-        currentAmount: 1500.66,
-        targetAmount: 2000,
-        category: "Support Fund",
-        creator: "UnityRelief",
-        donors: 535,
-        imageUrl: "https://images.unsplash.com/photo-1637909947197-a77fcd7d7b7a?auto=format&fit=crop&q=80&w=2070"
-    }
-  ]);
-
+const Donations = () => {
+  // Keep your existing state variables
+  const [donations, setDonations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
 
-  // Optional: Fetch donations from API instead of using static data
-  // useEffect(() => {
-  //   const fetchDonations = async () => {
-  //     setLoading(true);
-  //     try {
-  //       const response = await axios.get('/api/donations');
-  //       setDonations(response.data);
-  //       setError(null);
-  //     } catch (err) {
-  //       setError('Failed to fetch donations. Please try again later.');
-  //       console.error('Error fetching donations:', err);
-  //     } finally {
-  //       setLoading(false);
-  //     }
-  //   };
-  //   
-  //   fetchDonations();
-  // }, []);
+  useEffect(() => {
+    const fetchCampaigns = () => {
+      try {
+        setLoading(true);
+        
+        // Load from localStorage
+        const campaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
+        
+        // Filter to only show verified campaigns
+        const verifiedCampaigns = campaigns.filter(campaign => campaign.verified);
+        
+        // Map to match your donation card format
+        const formattedDonations = verifiedCampaigns.map(campaign => ({
+          id: campaign.id,
+          title: campaign.title,
+          description: campaign.description,
+          category: campaign.category,
+          goalAmount: campaign.goalAmount,
+          currentAmount: campaign.currentAmount || 0,
+          donors: campaign.donors || 0,
+          imageUrl: campaign.imageUrl || '/api/placeholder/400/300',
+          endDate: campaign.endDate
+        }));
+        
+        setDonations(formattedDonations);
+        setError(null);
+      } catch (error) {
+        console.error("Error fetching campaigns:", error);
+        setError("Failed to load campaigns. Please try again later.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchCampaigns();
+  }, []);
+  
+  
+  // Add new state for MetaMask connection
+  const [connectedAccount, setConnectedAccount] = useState(null);
+  const [metamaskError, setMetamaskError] = useState(null);
+
+  const handleAccountChange = (account) => {
+    setConnectedAccount(account);
+    setMetamaskError(null);
+  };
 
   const handleDonate = async (donationId, amount) => {
+    if (!connectedAccount) {
+      setMetamaskError('Please connect to MetaMask first');
+      return;
+    }
+  
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        alert('Please log in to make a donation');
-        // Redirect to login page
-        // window.location.href = '/login';
-        return;
-      }
-
       setLoading(true);
-      const response = await axios.post(`/api/donations/${donationId}/donate`, 
-        { amount }, 
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      
+      // Make donation via Ethereum
+      await ethereumService.donate(amount);
+      
+      // Update campaigns in localStorage
+      const campaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
+      const campaignIndex = campaigns.findIndex(c => c.id === donationId);
+      
+      if (campaignIndex !== -1) {
+        campaigns[campaignIndex].currentAmount = (parseFloat(campaigns[campaignIndex].currentAmount) || 0) + parseFloat(amount);
+        campaigns[campaignIndex].donors = (parseInt(campaigns[campaignIndex].donors) || 0) + 1;
+        localStorage.setItem('campaigns', JSON.stringify(campaigns));
+      }
       
       // Update local state with new donation amount
       setDonations(prevDonations => 
@@ -140,7 +87,7 @@ const Home = () => {
           donation.id === donationId 
             ? { 
                 ...donation, 
-                currentAmount: donation.currentAmount + amount,
+                currentAmount: parseFloat(donation.currentAmount) + parseFloat(amount),
                 donors: donation.donors + 1
               } 
             : donation
@@ -149,14 +96,14 @@ const Home = () => {
       
       alert('Thank you for your donation!');
     } catch (error) {
-      console.error('Donation failed', error.response?.data || error.message);
-      alert('Donation failed: ' + (error.response?.data?.message || 'Please try again later'));
+      console.error('Donation failed', error);
+      setMetamaskError('Donation failed: ' + (error.message || 'Please try again later'));
     } finally {
       setLoading(false);
     }
   };
 
-  // Filter donations based on search term and category
+  // Filter donations based on search term and category (keep your existing code)
   const filteredDonations = donations.filter(donation => {
     const matchesSearch = searchTerm === '' || 
       donation.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -168,7 +115,7 @@ const Home = () => {
     return matchesSearch && matchesCategory;
   });
 
-  // Get unique categories for filter dropdown
+  // Get unique categories for filter dropdown (keep your existing code)
   const categories = [...new Set(donations.map(donation => donation.category))];
 
   return (
@@ -177,8 +124,18 @@ const Home = () => {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-4">Support a Cause</h1>
         <p className="text-lg text-gray-600 mb-6">
-          Browse through our donation campaigns and contribute to those in need.
+          Browse through our donation campaigns and contribute using Ethereum through MetaMask.
         </p>
+        
+        {/* MetaMask Connection */}
+        <div className="mb-6">
+          <MetaMaskConnect onAccountChange={handleAccountChange} />
+          {metamaskError && (
+            <div className="bg-red-100 text-red-700 p-3 rounded-lg mt-2">
+              {metamaskError}
+            </div>
+          )}
+        </div>
         
         {/* Search and filter */}
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -248,4 +205,4 @@ const Home = () => {
   );
 };
 
-export default Home;
+export default Donations;

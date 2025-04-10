@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import { uploadPdfToCloudinary } from '../cloudinaryUpload.js';
 
 const CampaignApplication = () => {
   // Form state
@@ -27,6 +30,7 @@ const CampaignApplication = () => {
     fundraisingGoal: '',
     campaignDuration: '30',
     campaignDescription: '',
+    campaignImage: null,
     
     // Supporting Documents
     idDocument: null,
@@ -52,6 +56,12 @@ const CampaignApplication = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+  const [campaignImagePreview, setCampaignImagePreview] = useState(null);
+  const [campaignImageFile, setCampaignImageFile] = useState(null);
+  
+  // PDF state
+  const [pdfData, setPdfData] = useState(null);
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
   
   // Handle input changes
   const handleChange = (e) => {
@@ -80,6 +90,8 @@ const CampaignApplication = () => {
           setAddressPreview(event.target.result);
         } else if (name === 'campaignProposal') {
           setProposalPreview(event.target.result);
+        } else if (name === 'campaignImage') {
+          setCampaignImagePreview(event.target.result);
         }
       };
       reader.readAsDataURL(files[0]);
@@ -100,27 +112,158 @@ const CampaignApplication = () => {
       window.scrollTo(0, 0);
     }
   };
+
+  // Generate PDF
+  const generatePDF = async () => {
+    const doc = new jsPDF();
+    
+    // Add title
+    doc.setFontSize(20);
+    doc.text('Campaign Application', 105, 15, { align: 'center' });
+    
+    // Add application details
+    doc.setFontSize(12);
+    doc.text(`Applicant: ${formData.firstName} ${formData.lastName}`, 20, 30);
+    doc.text(`Email: ${formData.email}`, 20, 40);
+    doc.text(`Phone: ${formData.phone}`, 20, 50);
+    
+    // Campaign details
+    doc.text(`Campaign Title: ${formData.campaignTitle}`, 20, 70);
+    doc.text(`Category: ${formData.campaignCategory}`, 20, 80);
+    doc.text(`Fundraising Goal: $${formData.fundraisingGoal}`, 20, 90);
+    doc.text(`Duration: ${formData.campaignDuration} days`, 20, 100);
+    
+    // Description (with word wrap)
+    const splitDescription = doc.splitTextToSize(formData.campaignDescription || 'No description provided', 170);
+    doc.text('Description:', 20, 120);
+    doc.text(splitDescription, 20, 130);
+    
+    let yPosition = 130 + (splitDescription.length * 7);
+    
+    // Add campaign image if available
+    if (campaignImagePreview) {
+      doc.text('Campaign Image:', 20, yPosition);
+      try {
+        doc.addImage(campaignImagePreview, 'JPEG', 20, yPosition + 5, 80, 60);
+        yPosition += 70;
+      } catch (error) {
+        console.error("Error adding campaign image to PDF:", error);
+      }
+    }
+    
+    // Add ID document if available
+    if (idPreview) {
+      doc.text('ID Document:', 20, yPosition);
+      try {
+        doc.addImage(idPreview, 'JPEG', 20, yPosition + 5, 80, 60);
+        yPosition += 70;
+      } catch (error) {
+        console.error("Error adding ID document to PDF:", error);
+      }
+    }
+    
+    // Add address proof if available
+    if (addressPreview) {
+      doc.text('Address Proof:', 20, yPosition);
+      try {
+        doc.addImage(addressPreview, 'JPEG', 20, yPosition + 5, 80, 60);
+        yPosition += 70;
+      } catch (error) {
+        console.error("Error adding address proof to PDF:", error);
+      }
+    }
+    
+    // Add a new page if content exceeds the page height
+    if (yPosition > 250) {
+      doc.addPage();
+      yPosition = 20;
+    }
+    
+    // Add certification text
+    doc.text('Certification:', 20, yPosition);
+    doc.setFontSize(10);
+    doc.text('I certify that all information provided is true, accurate, and complete to the best of my knowledge.', 20, yPosition + 10);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, 20, yPosition + 20);
+    doc.text(`Applicant: ${formData.firstName} ${formData.lastName}`, 20, yPosition + 30);
+    
+    // Generate unique filename
+    const fileName = `campaign_application_${Date.now()}.pdf`;
+    
+    // Return the PDF as base64
+    const pdfBase64 = doc.output('datauristring');
+    return {
+      fileName,
+      pdfBase64,
+      doc
+    };
+  };
   
   // Form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     try {
-      // For now, we're just simulating a successful submission
-      // In a real application, you would send the data to your backend
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
+      const pdfResult = generatePDF();
+  
+      // Convert base64 to blob and create a File
+      const pdfBlob = await (await fetch(pdfResult.pdfBase64)).blob();
+      const pdfFile = new File([pdfBlob], pdfResult.fileName, { type: 'application/pdf' });
+  
+      // Upload to Cloudinary
+      const cloudinaryUrl = await uploadPdfToCloudinary(pdfFile);
+  
+      const campaign = {
+        id: Date.now().toString(),
+        title: formData.campaignTitle,
+        category: formData.campaignCategory,
+        description: formData.campaignDescription,
+        goalAmount: parseFloat(formData.fundraisingGoal),
+        currentAmount: 0,
+        duration: formData.campaignDuration,
+        endDate: new Date(Date.now() + parseInt(formData.campaignDuration) * 24 * 60 * 60 * 1000).toISOString(),
+        creatorName: `${formData.firstName} ${formData.lastName}`,
+        creatorEmail: formData.email,
+        pdfApplication: cloudinaryUrl,
+        verified: false,
+        donors: 0,
+        imageUrl: campaignImagePreview || '/api/placeholder/400/300'
+      };
+  
+      const existingCampaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
+      existingCampaigns.push(campaign);
+      localStorage.setItem('campaigns', JSON.stringify(existingCampaigns));
+  
+      setPdfData({ ...pdfResult, cloudinaryUrl });
       setSubmitSuccess(true);
+      setShowPdfPreview(true);
       setSubmitError(null);
-      // Scroll to top to show success message
-      window.scrollTo(0, 0);
+  
     } catch (error) {
-      setSubmitError("There was an error submitting your application. Please try again.");
+      console.error("Error submitting application:", error);
+      setSubmitError("There was an error uploading the PDF to Cloudinary.");
       setSubmitSuccess(false);
     } finally {
       setIsSubmitting(false);
     }
+  };
+  
+  // Handle PDF download
+  const handlePdfDownload = () => {
+    if (pdfData) {
+      const link = document.createElement('a');
+      link.href = pdfData.pdfBase64;
+      link.download = pdfData.fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+  
+  // Navigate to admin page
+  const goToAdminPage = () => {
+    // In a real app, you would use React Router here
+    window.location.href = '/admin/campaigns';
   };
   
   // Progress bar calculation
@@ -134,7 +277,7 @@ const CampaignApplication = () => {
       case 2: // ID Verification
         return formData.idType && formData.idNumber && formData.idExpiry;
       case 3: // Campaign Information
-        return formData.campaignTitle && formData.campaignCategory && formData.fundraisingGoal && formData.campaignDescription;
+      return formData.campaignTitle && formData.campaignCategory && formData.fundraisingGoal && formData.campaignDescription && formData.campaignImage;
       case 4: // Supporting Documents & Terms
         return formData.idDocument && formData.addressProof && formData.agreeTerms && formData.agreePrivacyPolicy && formData.certifyInformation;
       default:
@@ -170,6 +313,72 @@ const CampaignApplication = () => {
     { value: 'nationalId', label: 'National ID Card' },
     { value: 'other', label: 'Other Government-issued ID' }
   ];
+  
+  // Render PDF Preview UI
+  const renderPdfPreview = () => {
+    return (
+      <div className="bg-white p-6 rounded-lg shadow-md">
+        <div className="mb-6 text-center">
+          <h2 className="text-2xl font-bold text-green-600 mb-2">Application Submitted Successfully!</h2>
+          <p className="text-gray-600">Your campaign application has been received and is being reviewed.</p>
+        </div>
+        
+        <div className="bg-gray-100 p-4 rounded-lg mb-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">Application Summary</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm font-medium text-gray-500">Applicant</p>
+              <p className="text-gray-800">{formData.firstName} {formData.lastName}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">Email</p>
+              <p className="text-gray-800">{formData.email}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">Campaign Title</p>
+              <p className="text-gray-800">{formData.campaignTitle}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">Fundraising Goal</p>
+              <p className="text-gray-800">${formData.fundraisingGoal}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">Application PDF</h3>
+          <div className="border border-gray-300 rounded-lg p-2 h-64 flex items-center justify-center bg-gray-50">
+            <iframe 
+              src={pdfData?.pdfBase64}
+              className="w-full h-full"
+              title="Campaign Application PDF"
+            />
+          </div>
+        </div>
+        
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <button
+            onClick={handlePdfDownload}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center justify-center"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+            Download PDF
+          </button>
+          <button
+            onClick={goToAdminPage}
+            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center justify-center"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+            Go to Admin Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  };
   
   // Render form based on current step
   const renderFormStep = () => {
@@ -469,7 +678,50 @@ const CampaignApplication = () => {
                 to donors once your campaign is active.
               </p>
             </div>
+
+            <div>
+              <label htmlFor="campaignImage" className="block text-sm font-medium text-gray-700 mb-1">Campaign Main Image *</label>
+              <div className="flex items-center">
+                <input
+                  type="file"
+                  id="campaignImage"
+                  name="campaignImage"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  accept=".jpg,.jpeg,.png"
+                  required
+                />
+                <label 
+                  htmlFor="campaignImage" 
+                  className="flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  {campaignImagePreview ? 'Change Image' : 'Upload Image'}
+                </label>
+                {campaignImagePreview && (
+                  <span className="ml-2 text-sm text-green-600 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Image uploaded
+                  </span>
+                )}
+              </div>
+              {campaignImagePreview && (
+                <div className="mt-2">
+                  <img 
+                    src={campaignImagePreview} 
+                    alt="Campaign preview" 
+                    className="h-32 object-cover rounded-md border border-gray-300" 
+                  />
+                </div>
+              )}
+              <p className="mt-1 text-xs text-gray-500">Upload a high-quality image that represents your campaign (recommended size: 1200×630 pixels)</p>
+            </div>
           </div>
+          
         );
         
       case 4:
@@ -542,11 +794,11 @@ const CampaignApplication = () => {
                     </span>
                   )}
                 </div>
-                <p className="mt-1 text-xs text-gray-500">Recent utility bill, bank statement, or official mail (less than 3 months old)</p>
+                <p className="mt-1 text-xs text-gray-500">Upload a utility bill, bank statement, or other document showing your address (issued within 3 months)</p>
               </div>
               
               <div>
-                <label htmlFor="campaignProposal" className="block text-sm font-medium text-gray-700 mb-1">Campaign Proposal (optional)</label>
+                <label htmlFor="campaignProposal" className="block text-sm font-medium text-gray-700 mb-1">Campaign Proposal (Optional)</label>
                 <div className="flex items-center">
                   <input
                     type="file"
@@ -574,11 +826,11 @@ const CampaignApplication = () => {
                     </span>
                   )}
                 </div>
-                <p className="mt-1 text-xs text-gray-500">You may upload a detailed proposal document for your campaign</p>
+                <p className="mt-1 text-xs text-gray-500">Optionally upload a detailed proposal document for your campaign</p>
               </div>
             </div>
             
-            <div className="space-y-3 pt-4">
+            <div className="space-y-4 pt-4 border-t border-gray-200">
               <div className="flex items-start">
                 <div className="flex items-center h-5">
                   <input
@@ -587,12 +839,13 @@ const CampaignApplication = () => {
                     type="checkbox"
                     checked={formData.agreeTerms}
                     onChange={handleChange}
-                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
                     required
                   />
                 </div>
                 <div className="ml-3 text-sm">
-                  <label htmlFor="agreeTerms" className="text-gray-700">I agree to the <a href="#" className="text-blue-600 hover:underline">Terms and Conditions</a> *</label>
+                  <label htmlFor="agreeTerms" className="font-medium text-gray-700">I agree to the Terms and Conditions *</label>
+                  <p className="text-gray-500">I have read and agree to the <a href="#" className="text-blue-600 hover:underline">Terms and Conditions</a> of using this platform.</p>
                 </div>
               </div>
               
@@ -604,12 +857,13 @@ const CampaignApplication = () => {
                     type="checkbox"
                     checked={formData.agreePrivacyPolicy}
                     onChange={handleChange}
-                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
                     required
                   />
                 </div>
                 <div className="ml-3 text-sm">
-                  <label htmlFor="agreePrivacyPolicy" className="text-gray-700">I have read and agree to the <a href="#" className="text-blue-600 hover:underline">Privacy Policy</a> *</label>
+                  <label htmlFor="agreePrivacyPolicy" className="font-medium text-gray-700">I agree to the Privacy Policy *</label>
+                  <p className="text-gray-500">I understand how my information will be used as described in the <a href="#" className="text-blue-600 hover:underline">Privacy Policy</a>.</p>
                 </div>
               </div>
               
@@ -621,12 +875,13 @@ const CampaignApplication = () => {
                     type="checkbox"
                     checked={formData.certifyInformation}
                     onChange={handleChange}
-                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
                     required
                   />
                 </div>
                 <div className="ml-3 text-sm">
-                  <label htmlFor="certifyInformation" className="text-gray-700">I certify that all information provided is true and accurate *</label>
+                  <label htmlFor="certifyInformation" className="font-medium text-gray-700">I certify that all information provided is accurate *</label>
+                  <p className="text-gray-500">I certify that all information provided is true, accurate and complete to the best of my knowledge.</p>
                 </div>
               </div>
             </div>
@@ -638,157 +893,131 @@ const CampaignApplication = () => {
     }
   };
   
-  // In case of successful submission
-  if (submitSuccess) {
-    return (
-      <div className="bg-white min-h-screen">
-        <div className="max-w-3xl mx-auto p-4 sm:p-6 lg:p-8">
-          <div className="bg-green-50 border border-green-200 rounded-lg p-8 text-center">
-            <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-6">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+  return (
+    <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <div className="pb-5 border-b border-gray-200 mb-6">
+        <h1 className="text-3xl font-bold text-blue-900">Campaign Application</h1>
+        <p className="mt-2 text-gray-600">Complete this form to start your fundraising campaign</p>
+      </div>
+      
+      {/* Progress bar */}
+      <div className="mb-6">
+        <div className="flex justify-between mb-1">
+          <span className="text-sm font-medium text-blue-700">Step {currentStep} of {totalSteps}</span>
+          <span className="text-sm font-medium text-blue-700">{Math.round(progressPercentage)}% Complete</span>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
+          <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style={{ width: `${progressPercentage}%` }}></div>
+        </div>
+        
+        {/* Step labels */}
+        <div className="flex justify-between">
+          <div className={`flex flex-col items-center ${currentStep >= 1 ? 'text-blue-700' : 'text-gray-500'}`}>
+            <div className={`rounded-full h-8 w-8 flex items-center justify-center mb-1 transition-all duration-300 ${currentStep >= 1 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
+              1
             </div>
-            <h2 className="text-2xl font-bold text-green-800 mb-2">Application Submitted Successfully!</h2>
-            <p className="text-green-700 mb-6">
-              Thank you for applying to create a campaign with Great Care Charity. 
-              Our team will review your application and get back to you within 3-5 business days.
-            </p>
-            <div className="space-y-4">
-              <p className="text-gray-600">
-                Your reference number is: <span className="font-semibold">{Math.random().toString(36).substring(2, 10).toUpperCase()}</span>
-              </p>
-              <p className="text-gray-600">
-                You will receive a confirmation email shortly at <span className="font-semibold">{formData.email}</span>
-              </p>
+            <span className="text-xs truncate">Personal</span>
+          </div>
+          
+          <div className={`flex flex-col items-center ${currentStep >= 2 ? 'text-blue-700' : 'text-gray-500'}`}>
+            <div className={`rounded-full h-8 w-8 flex items-center justify-center mb-1 transition-all duration-300 ${currentStep >= 2 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
+              2
             </div>
-            <div className="mt-8">
-              <Link 
-                to="/" 
-                className="inline-flex items-center px-5 py-2 text-base font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Return to Homepage
-              </Link>
+            <span className="text-xs truncate">Identity</span>
+          </div>
+          
+          <div className={`flex flex-col items-center ${currentStep >= 3 ? 'text-blue-700' : 'text-gray-500'}`}>
+            <div className={`rounded-full h-8 w-8 flex items-center justify-center mb-1 transition-all duration-300 ${currentStep >= 3 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
+              3
             </div>
+            <span className="text-xs truncate">Campaign</span>
+          </div>
+          
+          <div className={`flex flex-col items-center ${currentStep >= 4 ? 'text-blue-700' : 'text-gray-500'}`}>
+            <div className={`rounded-full h-8 w-8 flex items-center justify-center mb-1 transition-all duration-300 ${currentStep >= 4 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
+              4
+            </div>
+            <span className="text-xs truncate">Documents</span>
           </div>
         </div>
       </div>
-    );
-  }
-
-  return (
-    <div className="bg-gray-50 min-h-screen py-8">
-      <div className="max-w-3xl mx-auto bg-white rounded-lg shadow-lg">
-        <div className="px-4 py-5 sm:p-6 lg:p-8">
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold text-gray-900">Campaign Application</h2>
-            <p className="mt-1 text-gray-600">
-              Complete this form to apply for creating a fundraising campaign
-            </p>
-          </div>
-          
-          {/* Progress bar */}
-          <div className="mb-8">
-            <div className="relative">
-              <div className="overflow-hidden h-2 text-xs flex rounded bg-gray-200">
-                <div 
-                  style={{ width: `${progressPercentage}%` }} 
-                  className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-blue-600 transition-all duration-300"
-                ></div>
-              </div>
-            </div>
-            <div className="flex justify-between text-xs text-gray-600 mt-1">
-              <span>Step {currentStep} of {totalSteps}</span>
-              <span>{Math.round(progressPercentage)}% Complete</span>
-            </div>
-          </div>
-          
-          {/* Error message */}
+      
+      {/* Success state */}
+      {submitSuccess ? (
+        renderPdfPreview()
+      ) : (
+        <form onSubmit={handleSubmit} className="bg-white shadow-md rounded-lg p-6">
+          {/* Show submission error if any */}
           {submitError && (
-            <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg relative" role="alert">
-              <span className="block sm:inline">{submitError}</span>
+            <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-red-700">{submitError}</p>
+                </div>
+              </div>
             </div>
           )}
           
-          <form onSubmit={handleSubmit}>
-            {/* Form steps */}
-            {renderFormStep()}
-            
-            {/* Navigation buttons */}
-            <div className="mt-8 pt-6 border-t border-gray-200 flex justify-between">
-              {currentStep > 1 ? (
-                <button
-                  type="button"
-                  onClick={prevStep}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                  Back
-                </button>
-              ) : (
-                <div></div>
-              )}
-              
-              {currentStep < totalSteps ? (
-                <button
-                  type="button"
-                  onClick={nextStep}
-                  disabled={!validateCurrentStep()}
-                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${!validateCurrentStep() ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  Next
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={!validateCurrentStep() || isSubmitting}
-                  className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 ${(!validateCurrentStep() || isSubmitting) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      Submit Application
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-          </form>
+          {/* Form steps */}
+          {renderFormStep()}
           
-          {/* Help section */}
-          <div className="mt-10 pt-6 border-t border-gray-200">
-            <h4 className="text-sm font-medium text-gray-500">Need Help?</h4>
-            <div className="mt-2 flex space-x-6">
-              <a href="#" className="text-sm text-blue-600 hover:text-blue-500 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                FAQs
-              </a>
-              <a href="#" className="text-sm text-blue-600 hover:text-blue-500 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-                Contact Support
-              </a>
-            </div>
+          {/* Navigation buttons */}
+          <div className="mt-8 flex justify-between">
+            {currentStep > 1 ? (
+              <button
+                type="button"
+                onClick={prevStep}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300"
+              >
+                Previous
+              </button>
+            ) : (
+              <div></div>
+            )}
+            
+            {currentStep < totalSteps ? (
+              <button
+                type="button"
+                onClick={nextStep}
+                disabled={!validateCurrentStep()}
+                className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  !validateCurrentStep() ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              >
+                Next
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={isSubmitting || !validateCurrentStep()}
+                className={`px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                  (isSubmitting || !validateCurrentStep()) ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              >
+                {isSubmitting ? (
+                  <span className="flex items-center">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Submitting...
+                  </span>
+                ) : (
+                  'Submit Application'
+                )}
+              </button>
+            )}
           </div>
-        </div>
+        </form>
+      )}
+      
+      <div className="mt-6 text-center text-sm text-gray-500">
+        <p>Need help? <a href="#" className="text-blue-600 hover:underline">Contact our support team</a></p>
       </div>
     </div>
   );
