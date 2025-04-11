@@ -83,6 +83,13 @@ const Login = () => {
     }
   };
 
+  const checkAdminAccess = (userEmail) => {
+    // This could be a list of admin emails or you could check a role field from your API response
+    const adminEmails = ['admin@example.com', 'youradmin@email.com'];
+    return adminEmails.includes(userEmail);
+  };
+  
+  // Then modify your handleSubmit function
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -92,20 +99,31 @@ const Login = () => {
       const response = await axios.post('http://localhost:4000/api/auth/login', formData);
       // Store token and user info
       localStorage.setItem('token', response.data.token);
-      
-      // Always store the email for the navbar
       localStorage.setItem('userEmail', formData.email);
       
-      // Store user info if available in the response
+      // Check if user is admin
+      const isAdmin = checkAdminAccess(formData.email);
+      
+      // Store user info with admin flag
       if (response.data.user) {
-        localStorage.setItem('user', JSON.stringify(response.data.user));
+        const userWithRole = {
+          ...response.data.user,
+          isAdmin
+        };
+        localStorage.setItem('user', JSON.stringify(userWithRole));
       } else {
-        // If no user object in response, create a basic one with the email
-        localStorage.setItem('user', JSON.stringify({ email: formData.email }));
+        localStorage.setItem('user', JSON.stringify({ 
+          email: formData.email,
+          isAdmin
+        }));
       }
       
-      // Redirect to home page
-      navigate('/');
+      // Redirect based on role
+      if (isAdmin) {
+        navigate('/admin/dashboard');
+      } else {
+        navigate('/');
+      }
       
       // Refresh the page to update navbar state
       window.location.reload();

@@ -99,11 +99,7 @@ const Navbar = () => {
             </Link>
             
             {isLoggedIn ? (
-              <>
-                <Link to="/dashboard" className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                  Dashboard
-                </Link>
-                
+              <>                
                 {/* User profile dropdown */}
                 <div className="ml-3 relative flex items-center">
                   {/* User avatar - profile picture or initials */}

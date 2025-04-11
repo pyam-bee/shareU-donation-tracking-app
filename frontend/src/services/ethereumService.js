@@ -1,74 +1,135 @@
-import { ethers } from "ethers";
+// services/ethereumService.js
 
-// Your smart contract ABI - you'll need to compile your contract to get this
-const contractABI = [
-  // This should contain the ABI from your DonationWallet.sol compilation
-  // Based on your contract, it would include functions like donate, withdraw, etc.
-];
-
-// Contract address - you'll get this after deploying your contract
-const contractAddress = "YOUR_DEPLOYED_CONTRACT_ADDRESS";
-
-export const ethereumService = {
-  provider: null,
-  signer: null,
-  contract: null,
-
-  async connectWallet() {
-    // Check if MetaMask is installed
-    if (!window.ethereum) {
-      throw new Error("MetaMask is not installed");
-    }
-
+const ethereumService = {
+  // Check if MetaMask is installed
+  isMetaMaskInstalled() {
+    return window.ethereum !== undefined;
+  },
+  
+  // Check if connected to Ganache
+  async isGanacheNetwork() {
     try {
-      // Request account access
-      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-      
-      // Connect to the Ethereum network via MetaMask
-      this.provider = new ethers.providers.Web3Provider(window.ethereum);
-      this.signer = this.provider.getSigner();
-      
-      // Initialize contract instance
-      this.contract = new ethers.Contract(contractAddress, contractABI, this.signer);
-      
+      const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+      // Ganache typically uses chain ID 1337 (0x539)
+      return chainId === '0x539' || chainId === '0x539'; // Check both formats
+    } catch (error) {
+      return false;
+    }
+  },
+  
+  // Get current network ID
+  async getNetworkId() {
+    if (!this.isMetaMaskInstalled()) {
+      throw new Error('MetaMask is not installed');
+    }
+    
+    try {
+      const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+      return parseInt(chainId, 16);
+    } catch (error) {
+      console.error('Error getting network ID:', error);
+      throw error;
+    }
+  },
+  
+  // Get network name
+  async getNetworkName() {
+    const chainId = await this.getNetworkId();
+    const networks = {
+      1: 'Ethereum Mainnet',
+      3: 'Ropsten',
+      4: 'Rinkeby',
+      5: 'Goerli',
+      42: 'Kovan',
+      56: 'Binance Smart Chain',
+      137: 'Polygon',
+      80001: 'Mumbai (Polygon Testnet)',
+      1337: 'Ganache (Local)',
+      31337: 'Hardhat (Local)'
+    };
+    
+    return networks[chainId] || `Chain ID: ${chainId}`;
+  },
+  
+  // Get connected accounts
+  async getAccounts() {
+    if (!this.isMetaMaskInstalled()) {
+      throw new Error('MetaMask is not installed');
+    }
+    
+    try {
+      const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+      return accounts;
+    } catch (error) {
+      console.error('Error getting accounts:', error);
+      throw error;
+    }
+  },
+  
+  // Connect to MetaMask
+  async connect() {
+    if (!this.isMetaMaskInstalled()) {
+      throw new Error('MetaMask is not installed');
+    }
+    
+    try {
+      const accounts = await window.ethereum.request({ 
+        method: 'eth_requestAccounts' 
+      });
       return accounts[0];
     } catch (error) {
-      console.error("Error connecting to MetaMask:", error);
+      console.error('Error connecting to MetaMask:', error);
       throw error;
     }
   },
-
-  async donate(amount) {
-    if (!this.contract) {
-      throw new Error("Contract not initialized");
+  
+  // Make a donation transaction
+  async donate(amount, recipientAddress = '0x5B38Da6a701c568545dCfcB03FcB875f56beddC4') {
+    if (!this.isMetaMaskInstalled()) {
+      throw new Error('MetaMask is not installed');
     }
     
     try {
-      // Convert amount to wei (smallest Ethereum unit)
-      const amountInWei = ethers.utils.parseEther(amount.toString());
+      const accounts = await this.getAccounts();
       
-      // Call donate function on the smart contract
-      const transaction = await this.contract.donate({ value: amountInWei });
+      if (accounts.length === 0) {
+        throw new Error('No connected accounts');
+      }
       
-      // Wait for transaction to be mined
-      return await transaction.wait();
+      const fromAddress = accounts[0];
+      
+      // Convert amount to wei (1 ETH = 10^18 wei)
+      const amountInWei = parseInt(Number(amount) * 1e18).toString(16);
+      
+      // Ganache-specific gas settings
+      const isGanache = await this.isGanacheNetwork();
+      const gasPrice = isGanache ? undefined : '0x3b9aca00'; // 1 gwei
+      
+      // Create transaction parameters
+      const transactionParameters = {
+        from: fromAddress,
+        to: recipientAddress,
+        value: '0x' + amountInWei, // Value in wei, converted to hex
+        gas: '0x5208', // 21000 gas in hex
+        gasPrice: gasPrice // Only set for non-Ganache networks
+      };
+      
+      // Log transaction details for debugging
+      console.log('Sending transaction:', transactionParameters);
+      
+      // Send transaction
+      const txHash = await window.ethereum.request({
+        method: 'eth_sendTransaction',
+        params: [transactionParameters],
+      });
+      
+      console.log('Transaction sent:', txHash);
+      return txHash;
     } catch (error) {
-      console.error("Error making donation:", error);
-      throw error;
-    }
-  },
-
-  async getDonationAmount(address) {
-    if (!this.contract) {
-      throw new Error("Contract not initialized");
-    }
-    
-    try {
-      const donationAmount = await this.contract.getDonationAmount(address);
-      return ethers.utils.formatEther(donationAmount);
-    } catch (error) {
-      console.error("Error getting donation amount:", error);
+      console.error('Error donating:', error);
       throw error;
     }
   }
 };
+
+export { ethereumService };

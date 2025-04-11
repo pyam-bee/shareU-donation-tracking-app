@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { uploadPdfToCloudinary } from '../cloudinaryUpload.js';
+import { campaignService } from '../services/campaignService.js';
 
 const CampaignApplication = () => {
   // Form state
@@ -114,7 +115,7 @@ const CampaignApplication = () => {
   };
 
   // Generate PDF
-  const generatePDF = async () => {
+  const generatePDF = () => {
     const doc = new jsPDF();
     
     // Add title
@@ -138,53 +139,84 @@ const CampaignApplication = () => {
     doc.text('Description:', 20, 120);
     doc.text(splitDescription, 20, 130);
     
-    let yPosition = 130 + (splitDescription.length * 7);
+    // Add document information
+    let currentY = 130 + splitDescription.length * 5;
+    doc.text('Uploaded Documents:', 20, currentY);
+    currentY += 10;
     
-    // Add campaign image if available
-    if (campaignImagePreview) {
-      doc.text('Campaign Image:', 20, yPosition);
-      try {
-        doc.addImage(campaignImagePreview, 'JPEG', 20, yPosition + 5, 80, 60);
-        yPosition += 70;
-      } catch (error) {
-        console.error("Error adding campaign image to PDF:", error);
-      }
-    }
-    
-    // Add ID document if available
+    // Add ID document information
     if (idPreview) {
-      doc.text('ID Document:', 20, yPosition);
+      doc.text('✓ ID Document: Uploaded', 20, currentY);
+      
+      // If you want to add the actual image (assuming idPreview contains the file data)
       try {
-        doc.addImage(idPreview, 'JPEG', 20, yPosition + 5, 80, 60);
-        yPosition += 70;
+        if (typeof idPreview === 'string' && idPreview.startsWith('data:')) {
+          // Add image if it's a data URL
+          doc.addImage(idPreview, 'JPEG', 20, currentY + 5, 50, 30);
+          currentY += 40;
+        } else {
+          currentY += 10;
+        }
       } catch (error) {
-        console.error("Error adding ID document to PDF:", error);
+        console.error('Error adding ID image to PDF:', error);
+        currentY += 10;
       }
+    } else {
+      doc.text('✗ ID Document: Not uploaded', 20, currentY);
+      currentY += 10;
     }
     
-    // Add address proof if available
+    // Add address proof information
     if (addressPreview) {
-      doc.text('Address Proof:', 20, yPosition);
+      doc.text('✓ Proof of Address: Uploaded', 20, currentY);
+      
       try {
-        doc.addImage(addressPreview, 'JPEG', 20, yPosition + 5, 80, 60);
-        yPosition += 70;
+        if (typeof addressPreview === 'string' && addressPreview.startsWith('data:')) {
+          // Add image if it's a data URL
+          doc.addImage(addressPreview, 'JPEG', 20, currentY + 5, 50, 30);
+          currentY += 40;
+        } else {
+          currentY += 10;
+        }
       } catch (error) {
-        console.error("Error adding address proof to PDF:", error);
+        console.error('Error adding address proof image to PDF:', error);
+        currentY += 10;
       }
+    } else {
+      doc.text('✗ Proof of Address: Not uploaded', 20, currentY);
+      currentY += 10;
     }
     
-    // Add a new page if content exceeds the page height
-    if (yPosition > 250) {
-      doc.addPage();
-      yPosition = 20;
+    // Add campaign proposal information
+    if (proposalPreview) {
+      doc.text('✓ Campaign Proposal: Uploaded', 20, currentY);
+      currentY += 10;
+    } else {
+      doc.text('Campaign Proposal: Not uploaded (Optional)', 20, currentY);
+      currentY += 10;
     }
     
-    // Add certification text
-    doc.text('Certification:', 20, yPosition);
-    doc.setFontSize(10);
-    doc.text('I certify that all information provided is true, accurate, and complete to the best of my knowledge.', 20, yPosition + 10);
-    doc.text(`Date: ${new Date().toLocaleDateString()}`, 20, yPosition + 20);
-    doc.text(`Applicant: ${formData.firstName} ${formData.lastName}`, 20, yPosition + 30);
+    // Add certification information
+    currentY += 10;
+    doc.text('Certifications:', 20, currentY);
+    currentY += 10;
+    
+    if (formData.agreeTerms) {
+      doc.text('✓ Agreed to Terms and Conditions', 20, currentY);
+      currentY += 10;
+    }
+    
+    if (formData.agreePrivacyPolicy) {
+      doc.text('✓ Agreed to Privacy Policy', 20, currentY);
+      currentY += 10;
+    }
+    
+    if (formData.certifyInformation) {
+      doc.text('✓ Certified information is accurate', 20, currentY);
+    }
+    
+    // Add submission date
+    doc.text(`Submission Date: ${new Date().toLocaleDateString()}`, 20, 280);
     
     // Generate unique filename
     const fileName = `campaign_application_${Date.now()}.pdf`;
@@ -202,17 +234,57 @@ const CampaignApplication = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-
+  
     try {
       const pdfResult = generatePDF();
   
-      // Convert base64 to blob and create a File
-      const pdfBlob = await (await fetch(pdfResult.pdfBase64)).blob();
+      // Better base64 to blob conversion
+      let pdfBlob;
+      let imageReference = '/api/placeholder/400/300';
+      if (campaignImagePreview) {
+        // If it's a base64 image (usually starts with "data:image")
+        if (campaignImagePreview.startsWith('data:image')) {
+          // Upload image to Cloudinary and get URL
+          try {
+            const imageUrl = await uploadImageToCloudinary(campaignImagePreview);
+            imageReference = imageUrl;
+          } catch (error) {
+            console.error("Failed to upload campaign image:", error);
+            // Fall back to placeholder
+          }
+        } else {
+          // It's already a URL, use it
+          imageReference = campaignImagePreview;
+        }
+      }
+      try {
+        // Extract the base64 data part - remove the header
+        const base64Data = pdfResult.pdfBase64.split(',')[1] || pdfResult.pdfBase64;
+        
+        // Convert base64 to binary
+        const binaryString = atob(base64Data);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        // Create blob from binary data
+        pdfBlob = new Blob([bytes], { type: 'application/pdf' });
+      } catch (error) {
+        console.error("Error converting PDF to blob:", error);
+        
+        // Alternative method as fallback
+        pdfBlob = pdfResult.doc.output('blob');
+      }
+      
+      // Create a File object from the blob
       const pdfFile = new File([pdfBlob], pdfResult.fileName, { type: 'application/pdf' });
-  
+    
       // Upload to Cloudinary
       const cloudinaryUrl = await uploadPdfToCloudinary(pdfFile);
-  
+      console.log("Cloudinary upload successful:", cloudinaryUrl);
+      
+      // Create a campaign object with only essential data
       const campaign = {
         id: Date.now().toString(),
         title: formData.campaignTitle,
@@ -224,24 +296,70 @@ const CampaignApplication = () => {
         endDate: new Date(Date.now() + parseInt(formData.campaignDuration) * 24 * 60 * 60 * 1000).toISOString(),
         creatorName: `${formData.firstName} ${formData.lastName}`,
         creatorEmail: formData.email,
-        pdfApplication: cloudinaryUrl,
+        pdfApplication: cloudinaryUrl, // Just store the URL
         verified: false,
         donors: 0,
-        imageUrl: campaignImagePreview || '/api/placeholder/400/300'
+        imageUrl: imageReference
       };
   
-      const existingCampaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
-      existingCampaigns.push(campaign);
-      localStorage.setItem('campaigns', JSON.stringify(existingCampaigns));
+      try {
+        // Save to backend through the API service
+        await campaignService.saveCampaign(campaign);
+        
+        // Also save to localStorage as a fallback/cache
+        try {
+          // Get existing campaigns
+          const existingCampaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
+                
+          // Keep only the 5 most recent campaigns
+          if (existingCampaigns.length >= 5) {
+            existingCampaigns.sort((a, b) => new Date(b.id) - new Date(a.id));
+            existingCampaigns.splice(5); // Keep only 5 campaigns
+          }
+                
+          // Add the new campaign
+          existingCampaigns.push(campaign);
+                
+          // Try to save to localStorage
+          localStorage.setItem('campaigns', JSON.stringify(existingCampaigns));
+        } catch (storageError) {
+          console.error("localStorage save failed", storageError);
+          // It's ok if localStorage fails since we have the backend now
+        }
   
-      setPdfData({ ...pdfResult, cloudinaryUrl });
-      setSubmitSuccess(true);
-      setShowPdfPreview(true);
-      setSubmitError(null);
+        // Update state for success
+        setPdfData({ ...pdfResult, cloudinaryUrl });
+        setSubmitSuccess(true);
+        setShowPdfPreview(true);
+        
+      } catch (apiError) {
+        console.error("API save failed, falling back to localStorage only:", apiError);
+        setSubmitError("Warning: Could not save to server. Your campaign may not be visible to administrators.");
+        
+        // Fallback to localStorage only
+        try {
+          const existingCampaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
+          
+          if (existingCampaigns.length >= 5) {
+            existingCampaigns.sort((a, b) => new Date(b.id) - new Date(a.id));
+            existingCampaigns.splice(5);
+          }
+          
+          existingCampaigns.push(campaign);
+          localStorage.setItem('campaigns', JSON.stringify(existingCampaigns));
+          
+          // Still show success but with a warning
+          setPdfData({ ...pdfResult, cloudinaryUrl });
+          setSubmitSuccess(true);
+          setShowPdfPreview(true);
+        } catch (storageError) {
+          throw new Error("Both API and localStorage failed");
+        }
+      }
   
     } catch (error) {
       console.error("Error submitting application:", error);
-      setSubmitError("There was an error uploading the PDF to Cloudinary.");
+      setSubmitError(`Upload failed: ${error.message}`);
       setSubmitSuccess(false);
     } finally {
       setIsSubmitting(false);

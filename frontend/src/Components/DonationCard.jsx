@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 
 const DonationCard = ({ donation, onDonate }) => {
-  const [donationAmount, setDonationAmount] = useState('');
+  const [donationAmount, setDonationAmount] = useState('0.01');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+  const [txHash, setTxHash] = useState(null);
   
   // Calculate progress percentage
   const progressPercentage = (donation.currentAmount / donation.goalAmount) * 100;
@@ -20,20 +22,31 @@ const DonationCard = ({ donation, onDonate }) => {
   // Handle donation submit
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError(null);
+    setTxHash(null);
     
     if (!donationAmount || isNaN(donationAmount) || parseFloat(donationAmount) <= 0) {
-      alert('Please enter a valid donation amount');
+      setError('Please enter a valid donation amount');
       return;
     }
     
     setIsSubmitting(true);
     
     try {
-      await onDonate(donation.id, donationAmount);
-      setDonationAmount(''); // Reset form after successful donation
+      const hash = await onDonate(donation.id, donationAmount);
+      setTxHash(hash);
+      setDonationAmount('0.01'); // Reset form after successful donation
+    } catch (err) {
+      setError(err.message || 'Failed to process donation');
     } finally {
       setIsSubmitting(false);
     }
+  };
+  
+  // Format transaction hash for display
+  const formatTxHash = (hash) => {
+    if (!hash) return '';
+    return `${hash.substring(0, 10)}...${hash.substring(hash.length - 8)}`;
   };
   
   return (
@@ -59,8 +72,8 @@ const DonationCard = ({ donation, onDonate }) => {
         {/* Progress bar */}
         <div className="mb-4">
           <div className="flex justify-between text-sm text-gray-600 mb-1">
-            <span>${donation.currentAmount.toLocaleString()} raised</span>
-            <span>Goal: ${donation.goalAmount.toLocaleString()}</span>
+            <span>{donation.currentAmount.toFixed(4)} ETH raised</span>
+            <span>Goal: {donation.goalAmount.toFixed(2)} ETH</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div 
@@ -80,15 +93,15 @@ const DonationCard = ({ donation, onDonate }) => {
         <form onSubmit={handleSubmit} className="mt-4">
           <div className="flex">
             <div className="relative flex-grow">
-              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">ETH</span>
               <input
                 type="number"
                 value={donationAmount}
                 onChange={(e) => setDonationAmount(e.target.value)}
                 placeholder="Amount"
-                className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-l-lg focus:ring-blue-500 focus:border-blue-500"
-                step="0.01"
-                min="0"
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-l-lg focus:ring-blue-500 focus:border-blue-500"
+                step="0.001"
+                min="0.001"
               />
             </div>
             <button
@@ -109,6 +122,27 @@ const DonationCard = ({ donation, onDonate }) => {
               )}
             </button>
           </div>
+          
+          {error && (
+            <div className="mt-2 text-sm text-red-600">
+              {error}
+            </div>
+          )}
+          
+          {txHash && (
+            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-md">
+              <p className="text-sm text-green-800 font-medium">Donation successful!</p>
+              <p className="text-xs text-green-700 mt-1">
+                Transaction: {formatTxHash(txHash)}
+                <button 
+                  onClick={() => window.open(`https://localhost:7545/tx/${txHash}`, '_blank')} 
+                  className="ml-2 text-blue-600 hover:underline"
+                >
+                  View
+                </button>
+              </p>
+            </div>
+          )}
         </form>
       </div>
     </div>
