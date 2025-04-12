@@ -1,4 +1,5 @@
 import React from 'react';
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import Home from './Pages/Home';
 import Navbar from './Components/Navbar';
@@ -51,6 +52,24 @@ const AppLayout = () => {
 };
 
 const App = () => {
+
+  useEffect(() => {
+    // Initialize ethereum service with recipient address from configuration or environment
+    const initializeEthereumService = async () => {
+      try {
+        // You could get this from an API, local storage, or environment variables
+        const defaultWalletAddress = process.env.REACT_APP_DEFAULT_WALLET_ADDRESS;
+        if (defaultWalletAddress) {
+          ethereumService.setRecipientAddress(defaultWalletAddress);
+        }
+      } catch (error) {
+        console.error('Error initializing ethereum service:', error);
+      }
+    };
+    
+    initializeEthereumService();
+  }, []);
+
   return (
     <BrowserRouter>
       <AppLayout />

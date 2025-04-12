@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { uploadPdfToCloudinary } from '../cloudinaryUpload.js';
 import { campaignService } from '../services/campaignService.js';
+import { ethereumService } from '../services/ethereumService.js';
 
 const CampaignApplication = () => {
   // Form state
@@ -32,6 +33,10 @@ const CampaignApplication = () => {
     campaignDuration: '30',
     campaignDescription: '',
     campaignImage: null,
+    
+    // Crypto Donation Settings
+    acceptCrypto: true,
+    ethWalletAddress: '',
     
     // Supporting Documents
     idDocument: null,
@@ -64,6 +69,49 @@ const CampaignApplication = () => {
   const [pdfData, setPdfData] = useState(null);
   const [showPdfPreview, setShowPdfPreview] = useState(false);
   
+  // Crypto conversion state
+  const [ethRate, setEthRate] = useState(null);
+  const [isLoadingRate, setIsLoadingRate] = useState(false);
+  const [ethEquivalent, setEthEquivalent] = useState('0');
+  const [walletAddressValid, setWalletAddressValid] = useState(true);
+  
+  // Update ethereum service when wallet address changes
+  useEffect(() => {
+    if (formData.acceptCrypto && formData.ethWalletAddress && walletAddressValid) {
+      ethereumService.setRecipientAddress(formData.ethWalletAddress);
+    }
+  }, [formData.ethWalletAddress, formData.acceptCrypto, walletAddressValid]);
+
+  // Fetch ETH to USD exchange rate on component mount
+  useEffect(() => {
+    const fetchEthRate = async () => {
+      setIsLoadingRate(true);
+      try {
+        // In a real app, you would use a real API like CoinGecko or similar
+        // This is a mock response for demonstration
+        const mockResponse = { ethereum: { usd: 2850.75 } };
+        setEthRate(mockResponse.ethereum.usd);
+      } catch (error) {
+        console.error('Error fetching ETH rate:', error);
+        setEthRate(2850.75); // Fallback rate if API fails
+      } finally {
+        setIsLoadingRate(false);
+      }
+    };
+    
+    fetchEthRate();
+  }, []);
+  
+  // Calculate ETH equivalent whenever fundraising goal changes
+  useEffect(() => {
+    if (ethRate && formData.fundraisingGoal) {
+      const ethAmount = parseFloat(formData.fundraisingGoal) / ethRate;
+      setEthEquivalent(ethAmount.toFixed(4));
+    } else {
+      setEthEquivalent('0');
+    }
+  }, [ethRate, formData.fundraisingGoal]);
+  
   // Handle input changes
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -71,6 +119,18 @@ const CampaignApplication = () => {
       ...formData,
       [name]: type === 'checkbox' ? checked : value
     });
+    
+    // Validate wallet address
+    if (name === 'ethWalletAddress') {
+      validateWalletAddress(value);
+    }
+  };
+  
+  // Ethereum wallet address validation
+  const validateWalletAddress = (address) => {
+    // Basic ETH address validation - should start with 0x and be 42 chars total
+    const isValid = /^0x[a-fA-F0-9]{40}$/.test(address);
+    setWalletAddressValid(isValid || address === '');
   };
   
   // Handle file uploads
@@ -131,16 +191,25 @@ const CampaignApplication = () => {
     // Campaign details
     doc.text(`Campaign Title: ${formData.campaignTitle}`, 20, 70);
     doc.text(`Category: ${formData.campaignCategory}`, 20, 80);
-    doc.text(`Fundraising Goal: $${formData.fundraisingGoal}`, 20, 90);
+    doc.text(`Fundraising Goal: $${formData.fundraisingGoal} (≈${ethEquivalent} ETH)`, 20, 90);
     doc.text(`Duration: ${formData.campaignDuration} days`, 20, 100);
+    
+    // Initialize currentY variable first before using it
+    let currentY = 110;
+    
+    // Crypto details if applicable
+    if (formData.acceptCrypto) {
+      doc.text(`Ethereum Wallet: ${formData.ethWalletAddress}`, 20, currentY);
+      currentY += 10;
+    }
     
     // Description (with word wrap)
     const splitDescription = doc.splitTextToSize(formData.campaignDescription || 'No description provided', 170);
-    doc.text('Description:', 20, 120);
-    doc.text(splitDescription, 20, 130);
+    doc.text('Description:', 20, currentY);
+    doc.text(splitDescription, 20, currentY + 10);
     
     // Add document information
-    let currentY = 130 + splitDescription.length * 5;
+    currentY = currentY + 10 + splitDescription.length * 5;
     doc.text('Uploaded Documents:', 20, currentY);
     currentY += 10;
     
@@ -187,10 +256,22 @@ const CampaignApplication = () => {
       currentY += 10;
     }
     
-    // Add campaign proposal information
+    // Add campaign proposal information - UPDATED CODE SECTION
     if (proposalPreview) {
       doc.text('✓ Campaign Proposal: Uploaded', 20, currentY);
-      currentY += 10;
+      
+      // For PDF/DOC files, we can't embed them directly, but we'll show file info
+      const proposalFileName = formData.campaignProposal ? formData.campaignProposal.name : 'proposal_document';
+      const fileSize = formData.campaignProposal ? 
+        (formData.campaignProposal.size < 1024 * 1024 
+          ? Math.round(formData.campaignProposal.size / 1024) + ' KB' 
+          : Math.round(formData.campaignProposal.size / (1024 * 1024) * 10) / 10 + ' MB') 
+        : 'Unknown size';
+      
+      // Add file details
+      doc.text(`   File: ${proposalFileName} (${fileSize})`, 20, currentY + 10);
+      doc.text(`   Type: Detailed campaign proposal document`, 20, currentY + 20);
+      currentY += 30; // Leave space for the file information
     } else {
       doc.text('Campaign Proposal: Not uploaded (Optional)', 20, currentY);
       currentY += 10;
@@ -246,7 +327,11 @@ const CampaignApplication = () => {
         if (campaignImagePreview.startsWith('data:image')) {
           // Upload image to Cloudinary and get URL
           try {
-            const imageUrl = await uploadImageToCloudinary(campaignImagePreview);
+            // Since uploadImageToCloudinary isn't defined, we'll use uploadPdfToCloudinary instead
+            // In a real app, you'd want a dedicated function for images
+            const imageUrl = await uploadPdfToCloudinary(
+              new File([dataURLtoBlob(campaignImagePreview)], `campaign_image_${Date.now()}.jpg`, { type: 'image/jpeg' })
+            );
             imageReference = imageUrl;
           } catch (error) {
             console.error("Failed to upload campaign image:", error);
@@ -257,6 +342,22 @@ const CampaignApplication = () => {
           imageReference = campaignImagePreview;
         }
       }
+      
+      // Helper function to convert data URL to Blob
+      function dataURLtoBlob(dataURL) {
+        const parts = dataURL.split(';base64,');
+        const contentType = parts[0].split(':')[1];
+        const raw = window.atob(parts[1]);
+        const rawLength = raw.length;
+        const uInt8Array = new Uint8Array(rawLength);
+        
+        for (let i = 0; i < rawLength; ++i) {
+          uInt8Array[i] = raw.charCodeAt(i);
+        }
+        
+        return new Blob([uInt8Array], { type: contentType });
+      }
+      
       try {
         // Extract the base64 data part - remove the header
         const base64Data = pdfResult.pdfBase64.split(',')[1] || pdfResult.pdfBase64;
@@ -299,7 +400,12 @@ const CampaignApplication = () => {
         pdfApplication: cloudinaryUrl, // Just store the URL
         verified: false,
         donors: 0,
-        imageUrl: imageReference
+        imageUrl: imageReference,
+        // Add crypto related fields
+        acceptCrypto: formData.acceptCrypto,
+        ethWalletAddress: formData.ethWalletAddress,
+        ethEquivalent: ethEquivalent,
+        ethRate: ethRate
       };
   
       try {
@@ -395,7 +501,9 @@ const CampaignApplication = () => {
       case 2: // ID Verification
         return formData.idType && formData.idNumber && formData.idExpiry;
       case 3: // Campaign Information
-      return formData.campaignTitle && formData.campaignCategory && formData.fundraisingGoal && formData.campaignDescription && formData.campaignImage;
+        const baseValidation = formData.campaignTitle && formData.campaignCategory && formData.fundraisingGoal && formData.campaignDescription && formData.campaignImage;
+        if (!formData.acceptCrypto) return baseValidation;
+        return baseValidation && formData.ethWalletAddress && walletAddressValid;
       case 4: // Supporting Documents & Terms
         return formData.idDocument && formData.addressProof && formData.agreeTerms && formData.agreePrivacyPolicy && formData.certifyInformation;
       default:
@@ -458,8 +566,16 @@ const CampaignApplication = () => {
             </div>
             <div>
               <p className="text-sm font-medium text-gray-500">Fundraising Goal</p>
-              <p className="text-gray-800">${formData.fundraisingGoal}</p>
+              <p className="text-gray-800">
+                ${formData.fundraisingGoal} (≈{ethEquivalent} ETH)
+              </p>
             </div>
+            {formData.acceptCrypto && (
+              <div>
+                <p className="text-sm font-medium text-gray-500">ETH Wallet Address</p>
+                <p className="text-gray-800 break-all">{formData.ethWalletAddress}</p>
+              </div>
+            )}
           </div>
         </div>
         
@@ -655,8 +771,8 @@ const CampaignApplication = () => {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                 required
               >
-                {idTypes.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
+                {idTypes.map(type => (
+                  <option key={type.value} value={type.value}>{type.label}</option>
                 ))}
               </select>
             </div>
@@ -687,17 +803,20 @@ const CampaignApplication = () => {
               />
             </div>
             
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <div className="flex items-center text-blue-800 mb-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="font-medium">Why we need this information</span>
+            <div className="bg-yellow-50 border border-yellow-100 rounded-lg p-4">
+              <div className="flex items-start">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-yellow-800">Important Note</h3>
+                  <div className="text-sm text-yellow-700 mt-2">
+                    <p>Your ID details will be verified in the next step where you'll upload a copy of your ID document. Please ensure the information matches exactly.</p>
+                  </div>
+                </div>
               </div>
-              <p className="text-sm text-gray-600">
-                We collect this information to comply with financial regulations and to ensure the security of our platform. 
-                Your information is encrypted and securely stored. We never share your personal information with third parties without your consent.
-              </p>
             </div>
           </div>
         );
@@ -705,8 +824,8 @@ const CampaignApplication = () => {
       case 3:
         return (
           <div className="space-y-6">
-            <h3 className="text-xl font-semibold text-blue-800">Campaign Details</h3>
-            <p className="text-gray-600 text-sm">Tell us about the campaign you'd like to create.</p>
+            <h3 className="text-xl font-semibold text-blue-800">Campaign Information</h3>
+            <p className="text-gray-600 text-sm">Tell us about your fundraising campaign.</p>
             
             <div>
               <label htmlFor="campaignTitle" className="block text-sm font-medium text-gray-700 mb-1">Campaign Title *</label>
@@ -718,7 +837,6 @@ const CampaignApplication = () => {
                 onChange={handleChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                 required
-                placeholder="e.g., Clean Water for Rural Schools"
               />
             </div>
             
@@ -732,7 +850,7 @@ const CampaignApplication = () => {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                 required
               >
-                {campaignCategories.map((category) => (
+                {campaignCategories.map(category => (
                   <option key={category.value} value={category.value}>{category.label}</option>
                 ))}
               </select>
@@ -740,17 +858,24 @@ const CampaignApplication = () => {
             
             <div>
               <label htmlFor="fundraisingGoal" className="block text-sm font-medium text-gray-700 mb-1">Fundraising Goal (USD) *</label>
-              <input
-                type="number"
-                id="fundraisingGoal"
-                name="fundraisingGoal"
-                value={formData.fundraisingGoal}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                required
-                min="100"
-                placeholder="5000"
-              />
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <span className="text-gray-500 sm:text-sm">$</span>
+                </div>
+                <input
+                  type="number"
+                  id="fundraisingGoal"
+                  name="fundraisingGoal"
+                  value={formData.fundraisingGoal}
+                  onChange={handleChange}
+                  min="100"
+                  className="w-full pl-7 px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+              {formData.fundraisingGoal && ethRate && (
+                <p className="mt-1 text-sm text-gray-500">≈ {ethEquivalent} ETH at current rates</p>
+              )}
             </div>
             
             <div>
@@ -763,7 +888,7 @@ const CampaignApplication = () => {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                 required
               >
-                {campaignDurations.map((duration) => (
+                {campaignDurations.map(duration => (
                   <option key={duration.value} value={duration.value}>{duration.label}</option>
                 ))}
               </select>
@@ -776,230 +901,286 @@ const CampaignApplication = () => {
                 name="campaignDescription"
                 value={formData.campaignDescription}
                 onChange={handleChange}
-                rows="5"
+                rows={5}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                 required
-                placeholder="Describe your campaign, its goals, and how the funds will be used..."
-              ></textarea>
+              />
             </div>
             
-            <div className="bg-yellow-50 p-4 rounded-lg">
-              <div className="flex items-center text-yellow-800 mb-2">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <span className="font-medium">Campaign Guidelines</span>
-              </div>
-              <p className="text-sm text-gray-600">
-                All campaigns are reviewed by our team before approval. Campaigns must comply with our terms of service and 
-                fundraising policies. We recommend being specific about how funds will be used and providing regular updates 
-                to donors once your campaign is active.
-              </p>
-            </div>
-
             <div>
-              <label htmlFor="campaignImage" className="block text-sm font-medium text-gray-700 mb-1">Campaign Main Image *</label>
-              <div className="flex items-center">
-                <input
-                  type="file"
-                  id="campaignImage"
-                  name="campaignImage"
-                  onChange={handleFileChange}
-                  className="hidden"
-                  accept=".jpg,.jpeg,.png"
-                  required
-                />
-                <label 
-                  htmlFor="campaignImage" 
-                  className="flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  {campaignImagePreview ? 'Change Image' : 'Upload Image'}
-                </label>
-                {campaignImagePreview && (
-                  <span className="ml-2 text-sm text-green-600 flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Campaign Image *</label>
+              <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg">
+                <div className="space-y-1 text-center">
+                  {campaignImagePreview ? (
+                    <div>
+                      <img 
+                        src={campaignImagePreview} 
+                        alt="Campaign preview" 
+                        className="mx-auto h-40 w-auto object-cover rounded-lg"
+                      />
+                      <p className="text-xs text-gray-500 mt-2">
+                        Click below to change image
+                      </p>
+                    </div>
+                  ) : (
+                    <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                      <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    Image uploaded
-                  </span>
-                )}
+                  )}
+                  
+                  <div className="flex text-sm text-gray-600">
+                    <label htmlFor="campaignImage" className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
+                      <span>Upload an image</span>
+                      <input 
+                        id="campaignImage" 
+                        name="campaignImage" 
+                        type="file" 
+                        accept="image/*"
+                        onChange={handleFileChange}
+                        className="sr-only" 
+                        required={!campaignImagePreview}
+                      />
+                    </label>
+                    <p className="pl-1">or drag and drop</p>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    PNG, JPG, GIF up to 10MB
+                  </p>
+                </div>
               </div>
-              {campaignImagePreview && (
-                <div className="mt-2">
-                  <img 
-                    src={campaignImagePreview} 
-                    alt="Campaign preview" 
-                    className="h-32 object-cover rounded-md border border-gray-300" 
+            </div>
+            
+            <div className="pt-4 border-t border-gray-200">
+              <div className="flex items-center justify-between">
+                <label htmlFor="acceptCrypto" className="font-medium text-gray-700">Accept Cryptocurrency Donations</label>
+                <div className="relative inline-block w-10 mr-2 align-middle select-none">
+                  <input
+                    type="checkbox"
+                    id="acceptCrypto"
+                    name="acceptCrypto"
+                    checked={formData.acceptCrypto}
+                    onChange={handleChange}
+                    className="checked:bg-blue-500 outline-none focus:outline-none right-4 checked:right-0 duration-200 ease-in absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"
+                  />
+                  <label 
+                    htmlFor="acceptCrypto" 
+                    className={`block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer ${formData.acceptCrypto ? 'bg-blue-400' : ''}`}
                   />
                 </div>
+              </div>
+              <p className="text-sm text-gray-500 mt-1">Enable Ethereum donations alongside traditional payments</p>
+              
+              {formData.acceptCrypto && (
+                <div className="mt-4">
+                  <label htmlFor="ethWalletAddress" className="block text-sm font-medium text-gray-700 mb-1">Ethereum Wallet Address *</label>
+                  <input
+                    type="text"
+                    id="ethWalletAddress"
+                    name="ethWalletAddress"
+                    value={formData.ethWalletAddress}
+                    onChange={handleChange}
+                    placeholder="0x..."
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-blue-500 focus:border-blue-500 ${!walletAddressValid && formData.ethWalletAddress ? 'border-red-500' : 'border-gray-300'}`}
+                    required={formData.acceptCrypto}
+                  />
+                  {!walletAddressValid && formData.ethWalletAddress && (
+                    <p className="mt-1 text-sm text-red-600">Please enter a valid Ethereum address (0x followed by 40 hexadecimal characters)</p>
+                  )}
+                  <p className="mt-1 text-sm text-gray-500">This is where you'll receive ETH donations. Double check your address!</p>
+                </div>
               )}
-              <p className="mt-1 text-xs text-gray-500">Upload a high-quality image that represents your campaign (recommended size: 1200×630 pixels)</p>
             </div>
           </div>
-          
         );
         
       case 4:
         return (
           <div className="space-y-6">
-            <h3 className="text-xl font-semibold text-blue-800">Supporting Documents & Agreement</h3>
-            <p className="text-gray-600 text-sm">Please upload the required verification documents and accept our terms.</p>
+            <h3 className="text-xl font-semibold text-blue-800">Supporting Documents & Terms</h3>
+            <p className="text-gray-600 text-sm">Please upload the required documents and agree to our terms.</p>
             
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="idDocument" className="block text-sm font-medium text-gray-700 mb-1">ID Document Copy *</label>
-                <div className="flex items-center">
-                  <input
-                    type="file"
-                    id="idDocument"
-                    name="idDocument"
-                    onChange={handleFileChange}
-                    className="hidden"
-                    accept=".jpg,.jpeg,.png,.pdf"
-                    required
-                  />
-                  <label 
-                    htmlFor="idDocument" 
-                    className="flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">ID Document *</label>
+              <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg">
+                <div className="space-y-1 text-center">
+                  {idPreview ? (
+                    <div>
+                      <img 
+                        src={idPreview} 
+                        alt="ID preview" 
+                        className="mx-auto h-40 w-auto object-cover rounded-lg"
+                      />
+                      <p className="text-xs text-gray-500 mt-2">
+                        Click below to change file
+                      </p>
+                    </div>
+                  ) : (
+                    <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                      <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0.1 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    {idPreview ? 'Change File' : 'Upload File'}
-                  </label>
-                  {idPreview && (
-                    <span className="ml-2 text-sm text-green-600 flex items-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      File uploaded
-                    </span>
                   )}
+                  
+                  <div className="flex text-sm text-gray-600">
+                    <label htmlFor="idDocument" className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
+                      <span>Upload ID document</span>
+                      <input 
+                        id="idDocument" 
+                        name="idDocument" 
+                        type="file"
+                        accept="image/*,.pdf"
+                        onChange={handleFileChange}
+                        className="sr-only" 
+                        required={!idPreview}
+                      />
+                    </label>
+                    <p className="pl-1">or drag and drop</p>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    PNG, JPG, PDF up to 10MB
+                  </p>
                 </div>
-                <p className="mt-1 text-xs text-gray-500">Upload a clear photo or scan of your ID (passport, driver's license, etc.)</p>
               </div>
-              
-              <div>
-                <label htmlFor="addressProof" className="block text-sm font-medium text-gray-700 mb-1">Proof of Address *</label>
-                <div className="flex items-center">
-                  <input
-                    type="file"
-                    id="addressProof"
-                    name="addressProof"
-                    onChange={handleFileChange}
-                    className="hidden"
-                    accept=".jpg,.jpeg,.png,.pdf"
-                    required
-                  />
-                  <label 
-                    htmlFor="addressProof" 
-                    className="flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Proof of Address *</label>
+              <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg">
+                <div className="space-y-1 text-center">
+                  {addressPreview ? (
+                    <div>
+                      <img 
+                        src={addressPreview} 
+                        alt="Address proof preview" 
+                        className="mx-auto h-40 w-auto object-cover rounded-lg"
+                      />
+                      <p className="text-xs text-gray-500 mt-2">
+                        Click below to change file
+                      </p>
+                    </div>
+                  ) : (
+                    <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                      <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    {addressPreview ? 'Change File' : 'Upload File'}
-                  </label>
-                  {addressPreview && (
-                    <span className="ml-2 text-sm text-green-600 flex items-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      File uploaded
-                    </span>
                   )}
+                  
+                  <div className="flex text-sm text-gray-600">
+                    <label htmlFor="addressProof" className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
+                      <span>Upload proof of address</span>
+                      <input 
+                        id="addressProof" 
+                        name="addressProof" 
+                        type="file"
+                        accept="image/*,.pdf"
+                        onChange={handleFileChange}
+                        className="sr-only" 
+                        required={!addressPreview}
+                      />
+                    </label>
+                    <p className="pl-1">or drag and drop</p>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Recent utility bill, bank statement, etc.
+                  </p>
                 </div>
-                <p className="mt-1 text-xs text-gray-500">Upload a utility bill, bank statement, or other document showing your address (issued within 3 months)</p>
               </div>
-              
-              <div>
-                <label htmlFor="campaignProposal" className="block text-sm font-medium text-gray-700 mb-1">Campaign Proposal (Optional)</label>
-                <div className="flex items-center">
-                  <input
-                    type="file"
-                    id="campaignProposal"
-                    name="campaignProposal"
-                    onChange={handleFileChange}
-                    className="hidden"
-                    accept=".pdf,.doc,.docx"
-                  />
-                  <label 
-                    htmlFor="campaignProposal" 
-                    className="flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    {proposalPreview ? 'Change File' : 'Upload File'}
-                  </label>
-                  {proposalPreview && (
-                    <span className="ml-2 text-sm text-green-600 flex items-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Campaign Proposal (Optional)</label>
+              <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg">
+                <div className="space-y-1 text-center">
+                  {proposalPreview ? (
+                    <div className="flex flex-col items-center">
+                      <svg className="h-12 w-12 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
                       </svg>
-                      File uploaded
-                    </span>
+                      <p className="text-sm font-medium text-gray-900 truncate mt-2">Document uploaded</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Click below to change file
+                      </p>
+                    </div>
+                  ) : (
+                    <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                      <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                   )}
+                  
+                  <div className="flex text-sm text-gray-600">
+                    <label htmlFor="campaignProposal" className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
+                      <span>Upload proposal document</span>
+                      <input 
+                        id="campaignProposal" 
+                        name="campaignProposal" 
+                        type="file"
+                        accept=".pdf,.doc,.docx"
+                        onChange={handleFileChange}
+                        className="sr-only"
+                      />
+                    </label>
+                    <p className="pl-1">or drag and drop</p>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Detailed campaign proposal (PDF, DOC, DOCX)
+                  </p>
                 </div>
-                <p className="mt-1 text-xs text-gray-500">Optionally upload a detailed proposal document for your campaign</p>
               </div>
             </div>
             
             <div className="space-y-4 pt-4 border-t border-gray-200">
               <div className="flex items-start">
-                <div className="flex items-center h-5">
+                <div className="flex-shrink-0">
                   <input
                     id="agreeTerms"
                     name="agreeTerms"
                     type="checkbox"
                     checked={formData.agreeTerms}
                     onChange={handleChange}
-                    className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     required
                   />
                 </div>
-                <div className="ml-3 text-sm">
-                  <label htmlFor="agreeTerms" className="font-medium text-gray-700">I agree to the Terms and Conditions *</label>
-                  <p className="text-gray-500">I have read and agree to the <a href="#" className="text-blue-600 hover:underline">Terms and Conditions</a> of using this platform.</p>
+                <div className="ml-3">
+                  <label htmlFor="agreeTerms" className="text-sm text-gray-700">
+                    I agree to the <a href="#" className="text-blue-600 hover:text-blue-500">Terms and Conditions</a> *
+                  </label>
                 </div>
               </div>
               
               <div className="flex items-start">
-                <div className="flex items-center h-5">
+                <div className="flex-shrink-0">
                   <input
                     id="agreePrivacyPolicy"
                     name="agreePrivacyPolicy"
                     type="checkbox"
                     checked={formData.agreePrivacyPolicy}
                     onChange={handleChange}
-                    className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     required
                   />
                 </div>
-                <div className="ml-3 text-sm">
-                  <label htmlFor="agreePrivacyPolicy" className="font-medium text-gray-700">I agree to the Privacy Policy *</label>
-                  <p className="text-gray-500">I understand how my information will be used as described in the <a href="#" className="text-blue-600 hover:underline">Privacy Policy</a>.</p>
+                <div className="ml-3">
+                  <label htmlFor="agreePrivacyPolicy" className="text-sm text-gray-700">
+                    I agree to the <a href="#" className="text-blue-600 hover:text-blue-500">Privacy Policy</a> *
+                  </label>
                 </div>
               </div>
               
               <div className="flex items-start">
-                <div className="flex items-center h-5">
+                <div className="flex-shrink-0">
                   <input
                     id="certifyInformation"
                     name="certifyInformation"
                     type="checkbox"
                     checked={formData.certifyInformation}
                     onChange={handleChange}
-                    className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     required
                   />
                 </div>
-                <div className="ml-3 text-sm">
-                  <label htmlFor="certifyInformation" className="font-medium text-gray-700">I certify that all information provided is accurate *</label>
-                  <p className="text-gray-500">I certify that all information provided is true, accurate and complete to the best of my knowledge.</p>
+                <div className="ml-3">
+                  <label htmlFor="certifyInformation" className="text-sm text-gray-700">
+                    I certify that all information provided is accurate and complete *
+                  </label>
                 </div>
               </div>
             </div>
@@ -1011,132 +1192,104 @@ const CampaignApplication = () => {
     }
   };
   
+  // Main component render
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-      <div className="pb-5 border-b border-gray-200 mb-6">
-        <h1 className="text-3xl font-bold text-blue-900">Campaign Application</h1>
-        <p className="mt-2 text-gray-600">Complete this form to start your fundraising campaign</p>
-      </div>
-      
-      {/* Progress bar */}
-      <div className="mb-6">
-        <div className="flex justify-between mb-1">
-          <span className="text-sm font-medium text-blue-700">Step {currentStep} of {totalSteps}</span>
-          <span className="text-sm font-medium text-blue-700">{Math.round(progressPercentage)}% Complete</span>
-        </div>
-        <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
-          <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style={{ width: `${progressPercentage}%` }}></div>
-        </div>
-        
-        {/* Step labels */}
-        <div className="flex justify-between">
-          <div className={`flex flex-col items-center ${currentStep >= 1 ? 'text-blue-700' : 'text-gray-500'}`}>
-            <div className={`rounded-full h-8 w-8 flex items-center justify-center mb-1 transition-all duration-300 ${currentStep >= 1 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
-              1
-            </div>
-            <span className="text-xs truncate">Personal</span>
-          </div>
-          
-          <div className={`flex flex-col items-center ${currentStep >= 2 ? 'text-blue-700' : 'text-gray-500'}`}>
-            <div className={`rounded-full h-8 w-8 flex items-center justify-center mb-1 transition-all duration-300 ${currentStep >= 2 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
-              2
-            </div>
-            <span className="text-xs truncate">Identity</span>
-          </div>
-          
-          <div className={`flex flex-col items-center ${currentStep >= 3 ? 'text-blue-700' : 'text-gray-500'}`}>
-            <div className={`rounded-full h-8 w-8 flex items-center justify-center mb-1 transition-all duration-300 ${currentStep >= 3 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
-              3
-            </div>
-            <span className="text-xs truncate">Campaign</span>
-          </div>
-          
-          <div className={`flex flex-col items-center ${currentStep >= 4 ? 'text-blue-700' : 'text-gray-500'}`}>
-            <div className={`rounded-full h-8 w-8 flex items-center justify-center mb-1 transition-all duration-300 ${currentStep >= 4 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
-              4
-            </div>
-            <span className="text-xs truncate">Documents</span>
-          </div>
-        </div>
-      </div>
-      
-      {/* Success state */}
+    <div className="max-w-4xl mx-auto px-4 py-8">
       {submitSuccess ? (
-        renderPdfPreview()
+        // Show PDF preview after successful submission
+        showPdfPreview && pdfData && renderPdfPreview()
       ) : (
-        <form onSubmit={handleSubmit} className="bg-white shadow-md rounded-lg p-6">
-          {/* Show submission error if any */}
-          {submitError && (
-            <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
+        // Show the application form
+        <div className="bg-white shadow-md rounded-lg overflow-hidden">
+          <div className="px-6 py-4 bg-blue-50 border-b border-blue-100">
+            <h2 className="text-2xl font-bold text-blue-800">Campaign Application</h2>
+            <p className="text-blue-600">Complete this form to apply for a new fundraising campaign</p>
+          </div>
+          
+          {/* Progress bar */}
+          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <div className="flex justify-between mb-1">
+              <span className="text-sm font-medium text-gray-500">Step {currentStep} of {totalSteps}</span>
+              <span className="text-sm font-medium text-blue-600">{Math.round(progressPercentage)}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2.5">
+              <div 
+                className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" 
+                style={{ width: `${progressPercentage}%` }}
+              ></div>
+            </div>
+          </div>
+          
+          {/* Form content */}
+          <form onSubmit={handleSubmit}>
+            <div className="p-6">
+              {renderFormStep()}
+              
+              {/* Error message */}
+              {submitError && (
+                <div className="mt-6 bg-red-50 border border-red-100 text-red-700 px-4 py-3 rounded relative" role="alert">
+                  <strong className="font-bold">Error!</strong>
+                  <span className="block sm:inline"> {submitError}</span>
                 </div>
-                <div className="ml-3">
-                  <p className="text-sm text-red-700">{submitError}</p>
-                </div>
+              )}
+              
+              {/* Navigation buttons */}
+              <div className="mt-8 flex justify-between">
+                {currentStep > 1 && (
+                  <button
+                    type="button"
+                    onClick={prevStep}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                  >
+                    Previous
+                  </button>
+                )}
+                
+                {currentStep < totalSteps ? (
+                  <button
+                    type="button"
+                    onClick={nextStep}
+                    disabled={!validateCurrentStep()}
+                    className={`ml-auto px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                      validateCurrentStep()
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-blue-300 text-white cursor-not-allowed'
+                    }`}
+                  >
+                    Next
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || !validateCurrentStep()}
+                    className={`ml-auto px-4 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 ${
+                      !isSubmitting && validateCurrentStep()
+                        ? 'bg-green-600 text-white hover:bg-green-700'
+                        : 'bg-green-300 text-white cursor-not-allowed'
+                    }`}
+                  >
+                    {isSubmitting ? (
+                      <div className="flex items-center">
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Processing...
+                      </div>
+                    ) : (
+                      'Submit Application'
+                    )}
+                  </button>
+                )}
               </div>
             </div>
-          )}
+          </form>
           
-          {/* Form steps */}
-          {renderFormStep()}
-          
-          {/* Navigation buttons */}
-          <div className="mt-8 flex justify-between">
-            {currentStep > 1 ? (
-              <button
-                type="button"
-                onClick={prevStep}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300"
-              >
-                Previous
-              </button>
-            ) : (
-              <div></div>
-            )}
-            
-            {currentStep < totalSteps ? (
-              <button
-                type="button"
-                onClick={nextStep}
-                disabled={!validateCurrentStep()}
-                className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  !validateCurrentStep() ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                Next
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={isSubmitting || !validateCurrentStep()}
-                className={`px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                  (isSubmitting || !validateCurrentStep()) ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                {isSubmitting ? (
-                  <span className="flex items-center">
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Submitting...
-                  </span>
-                ) : (
-                  'Submit Application'
-                )}
-              </button>
-            )}
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 text-sm text-gray-500">
+            <p>Need help? Contact our support team at <a href="mailto:support@example.com" className="text-blue-600 hover:text-blue-500">support@example.com</a></p>
           </div>
-        </form>
+        </div>
       )}
-      
-      <div className="mt-6 text-center text-sm text-gray-500">
-        <p>Need help? <a href="#" className="text-blue-600 hover:underline">Contact our support team</a></p>
-      </div>
     </div>
   );
 };

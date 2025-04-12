@@ -1,6 +1,22 @@
 // services/ethereumService.js
 
 const ethereumService = {
+  // Store the recipient address
+  recipientAddress: null,
+  
+  // Set recipient address
+  setRecipientAddress(address) {
+    this.recipientAddress = address;
+  },
+  
+  // Get recipient address
+  getRecipientAddress() {
+    if (!this.recipientAddress) {
+      throw new Error('Recipient address not set');
+    }
+    return this.recipientAddress;
+  },
+
   // Check if MetaMask is installed
   isMetaMaskInstalled() {
     return window.ethereum !== undefined;
@@ -84,7 +100,7 @@ const ethereumService = {
   },
   
   // Make a donation transaction
-  async donate(amount, recipientAddress = '0x5B38Da6a701c568545dCfcB03FcB875f56beddC4') {
+  async donate(amount, recipientAddress) {
     if (!this.isMetaMaskInstalled()) {
       throw new Error('MetaMask is not installed');
     }
@@ -94,6 +110,13 @@ const ethereumService = {
       
       if (accounts.length === 0) {
         throw new Error('No connected accounts');
+      }
+      
+      // Use provided recipient address or try to get it from the service
+      const toAddress = recipientAddress || this.recipientAddress;
+      
+      if (!toAddress) {
+        throw new Error('Recipient address not set');
       }
       
       const fromAddress = accounts[0];
@@ -108,7 +131,7 @@ const ethereumService = {
       // Create transaction parameters
       const transactionParameters = {
         from: fromAddress,
-        to: recipientAddress,
+        to: toAddress,
         value: '0x' + amountInWei, // Value in wei, converted to hex
         gas: '0x5208', // 21000 gas in hex
         gasPrice: gasPrice // Only set for non-Ganache networks

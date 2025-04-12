@@ -11,7 +11,10 @@ const Donations = () => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
-
+  
+  // We don't need recipientAddress at the component level if we're showing multiple campaigns
+  // Each campaign should have its own recipient address
+  
   useEffect(() => {
     const fetchCampaigns = () => {
       try {
@@ -33,7 +36,8 @@ const Donations = () => {
           currentAmount: campaign.currentAmount || 0,
           donors: campaign.donors || 0,
           imageUrl: campaign.imageUrl || '/api/placeholder/400/300',
-          endDate: campaign.endDate
+          endDate: campaign.endDate,
+          ethWalletAddress: campaign.ethWalletAddress || '' // Include wallet address in each campaign
         }));
         
         setDonations(formattedDonations);
@@ -67,9 +71,21 @@ const Donations = () => {
   
     try {
       setLoading(true);
+
+      // Find the campaign to get its recipient address
+      const campaign = donations.find(donation => donation.id === donationId);
       
-      // Make donation via Ethereum
-      await ethereumService.donate(amount);
+      if (!campaign) {
+        throw new Error('Campaign not found');
+      }
+      
+      if (!campaign.ethWalletAddress) {
+        throw new Error('Campaign has no associated wallet address');
+      }
+      
+      // Pass the recipient address directly to the donate function
+      const txHash = await ethereumService.donate(amount, campaign.ethWalletAddress);
+      console.log('Donation successful:', txHash);
       
       // Update campaigns in localStorage
       const campaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
@@ -103,7 +119,7 @@ const Donations = () => {
     }
   };
 
-  // Filter donations based on search term and category (keep your existing code)
+  // Filter donations based on search term and category
   const filteredDonations = donations.filter(donation => {
     const matchesSearch = searchTerm === '' || 
       donation.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -115,7 +131,7 @@ const Donations = () => {
     return matchesSearch && matchesCategory;
   });
 
-  // Get unique categories for filter dropdown (keep your existing code)
+  // Get unique categories for filter dropdown
   const categories = [...new Set(donations.map(donation => donation.category))];
 
   return (
