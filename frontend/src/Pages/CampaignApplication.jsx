@@ -5,6 +5,7 @@ import 'jspdf-autotable';
 import { uploadPdfToCloudinary } from '../cloudinaryUpload.js';
 import { campaignService } from '../services/campaignService.js';
 import { ethereumService } from '../services/ethereumService.js';
+import { contractService } from '../services/contractService.js';
 
 const CampaignApplication = () => {
   // Form state
@@ -311,7 +312,6 @@ const CampaignApplication = () => {
     };
   };
   
-  // Form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -319,26 +319,19 @@ const CampaignApplication = () => {
     try {
       const pdfResult = generatePDF();
   
-      // Better base64 to blob conversion
-      let pdfBlob;
+      // Image handling
       let imageReference = '/api/placeholder/400/300';
       if (campaignImagePreview) {
-        // If it's a base64 image (usually starts with "data:image")
         if (campaignImagePreview.startsWith('data:image')) {
-          // Upload image to Cloudinary and get URL
           try {
-            // Since uploadImageToCloudinary isn't defined, we'll use uploadPdfToCloudinary instead
-            // In a real app, you'd want a dedicated function for images
             const imageUrl = await uploadPdfToCloudinary(
               new File([dataURLtoBlob(campaignImagePreview)], `campaign_image_${Date.now()}.jpg`, { type: 'image/jpeg' })
             );
             imageReference = imageUrl;
           } catch (error) {
             console.error("Failed to upload campaign image:", error);
-            // Fall back to placeholder
           }
         } else {
-          // It's already a URL, use it
           imageReference = campaignImagePreview;
         }
       }
@@ -358,23 +351,18 @@ const CampaignApplication = () => {
         return new Blob([uInt8Array], { type: contentType });
       }
       
+      // PDF handling
+      let pdfBlob;
       try {
-        // Extract the base64 data part - remove the header
         const base64Data = pdfResult.pdfBase64.split(',')[1] || pdfResult.pdfBase64;
-        
-        // Convert base64 to binary
         const binaryString = atob(base64Data);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
           bytes[i] = binaryString.charCodeAt(i);
         }
-        
-        // Create blob from binary data
         pdfBlob = new Blob([bytes], { type: 'application/pdf' });
       } catch (error) {
         console.error("Error converting PDF to blob:", error);
-        
-        // Alternative method as fallback
         pdfBlob = pdfResult.doc.output('blob');
       }
       
@@ -385,81 +373,169 @@ const CampaignApplication = () => {
       const cloudinaryUrl = await uploadPdfToCloudinary(pdfFile);
       console.log("Cloudinary upload successful:", cloudinaryUrl);
       
-      // Create a campaign object with only essential data
-      const campaign = {
-        id: Date.now().toString(),
-        title: formData.campaignTitle,
-        category: formData.campaignCategory,
-        description: formData.campaignDescription,
-        goalAmount: parseFloat(formData.fundraisingGoal),
-        currentAmount: 0,
-        duration: formData.campaignDuration,
-        endDate: new Date(Date.now() + parseInt(formData.campaignDuration) * 24 * 60 * 60 * 1000).toISOString(),
-        creatorName: `${formData.firstName} ${formData.lastName}`,
-        creatorEmail: formData.email,
-        pdfApplication: cloudinaryUrl, // Just store the URL
-        verified: false,
-        donors: 0,
-        imageUrl: imageReference,
-        // Add crypto related fields
-        acceptCrypto: formData.acceptCrypto,
-        ethWalletAddress: formData.ethWalletAddress,
-        ethEquivalent: ethEquivalent,
-        ethRate: ethRate
-      };
-  
+      // Calculate duration in days from the form input
+      const durationInDays = parseInt(formData.campaignDuration);
+      
+      // First, create the campaign on the blockchain
       try {
-        // Save to backend through the API service
-        await campaignService.saveCampaign(campaign);
-        
-        // Also save to localStorage as a fallback/cache
-        try {
-          // Get existing campaigns
-          const existingCampaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
-                
-          // Keep only the 5 most recent campaigns
-          if (existingCampaigns.length >= 5) {
-            existingCampaigns.sort((a, b) => new Date(b.id) - new Date(a.id));
-            existingCampaigns.splice(5); // Keep only 5 campaigns
-          }
-                
-          // Add the new campaign
-          existingCampaigns.push(campaign);
-                
-          // Try to save to localStorage
-          localStorage.setItem('campaigns', JSON.stringify(existingCampaigns));
-        } catch (storageError) {
-          console.error("localStorage save failed", storageError);
-          // It's ok if localStorage fails since we have the backend now
+        // Initialize contract service if not already initialized
+        if (!contractService.contract) {
+          await contractService.init();
         }
-  
-        // Update state for success
-        setPdfData({ ...pdfResult, cloudinaryUrl });
-        setSubmitSuccess(true);
-        setShowPdfPreview(true);
         
-      } catch (apiError) {
-        console.error("API save failed, falling back to localStorage only:", apiError);
-        setSubmitError("Warning: Could not save to server. Your campaign may not be visible to administrators.");
+        // Convert fundraising goal to ETH string
+        const goalAmountEth = formData.fundraisingGoal.toString();
         
-        // Fallback to localStorage only
+        console.log("Creating campaign on blockchain with:", {
+          title: formData.campaignTitle,
+          description: formData.campaignDescription,
+          goalAmount: goalAmountEth,
+          duration: durationInDays
+        });
+        
+        // Create campaign on blockchain
+        const blockchainResult = await contractService.createCampaign(
+          formData.campaignTitle,
+          formData.campaignDescription,
+          goalAmountEth,
+          durationInDays
+        );
+        
+        console.log("Campaign created on blockchain:", blockchainResult);
+        
+        // Get the campaign ID from the blockchain result
+        const campaignId = blockchainResult.campaignId;
+        
+        // Create a campaign object with both blockchain and off-chain data
+        const campaign = {
+          id: campaignId.toString(), // Use blockchain campaign ID
+          blockchainId: campaignId,
+          transactionHash: blockchainResult.transactionHash,
+          title: formData.campaignTitle,
+          category: formData.campaignCategory,
+          description: formData.campaignDescription,
+          goalAmount: parseFloat(formData.fundraisingGoal),
+          currentAmount: 0,
+          duration: durationInDays,
+          endDate: new Date(Date.now() + durationInDays * 24 * 60 * 60 * 1000).toISOString(),
+          creatorName: `${formData.firstName} ${formData.lastName}`,
+          creatorEmail: formData.email,
+          pdfApplication: cloudinaryUrl,
+          verified: false,
+          donors: 0,
+          imageUrl: imageReference,
+          // Add crypto related fields
+          acceptCrypto: formData.acceptCrypto,
+          ethWalletAddress: formData.ethWalletAddress || await contractService.signer.getAddress(), // Use connected wallet if not specified
+          ethEquivalent: ethEquivalent,
+          ethRate: ethRate
+        };
+      
         try {
-          const existingCampaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
+          // Save to backend through the API service
+          await campaignService.saveCampaign(campaign);
           
+          // Also save to localStorage as a fallback/cache
+          try {
+            // Get existing campaigns
+            const existingCampaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
+                  
+            // Keep only the 5 most recent campaigns
+            if (existingCampaigns.length >= 5) {
+              existingCampaigns.sort((a, b) => new Date(b.id) - new Date(a.id));
+              existingCampaigns.splice(5); // Keep only 5 campaigns
+            }
+                  
+            // Add the new campaign
+            existingCampaigns.push(campaign);
+                  
+            // Try to save to localStorage
+            localStorage.setItem('campaigns', JSON.stringify(existingCampaigns));
+          } catch (storageError) {
+            console.error("localStorage save failed", storageError);
+          }
+      
+          // Update state for success
+          setPdfData({ ...pdfResult, cloudinaryUrl });
+          setSubmitSuccess(true);
+          setShowPdfPreview(true);
+          
+          // Optionally, fetch the campaign from blockchain to verify it was created correctly
+          try {
+            const blockchainCampaign = await contractService.getCampaignById(campaignId);
+            console.log("Retrieved campaign from blockchain:", blockchainCampaign);
+          } catch (verifyError) {
+            console.warn("Could not verify campaign on blockchain, it may need approval:", verifyError);
+          }
+          
+        } catch (apiError) {
+          console.error("API save failed, falling back to localStorage only:", apiError);
+          setSubmitError("Warning: Could not save to server. Your campaign may not be visible to administrators.");
+          
+          // Fallback to localStorage only
+          try {
+            const existingCampaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
+            
+            if (existingCampaigns.length >= 5) {
+              existingCampaigns.sort((a, b) => new Date(b.id) - new Date(a.id));
+              existingCampaigns.splice(5);
+            }
+            
+            existingCampaigns.push(campaign);
+            localStorage.setItem('campaigns', JSON.stringify(existingCampaigns));
+            
+            // Still show success but with a warning
+            setPdfData({ ...pdfResult, cloudinaryUrl });
+            setSubmitSuccess(true);
+            setShowPdfPreview(true);
+          } catch (storageError) {
+            throw new Error("Both API and localStorage failed");
+          }
+        }
+      } catch (blockchainError) {
+        console.error("Blockchain campaign creation failed:", blockchainError);
+        
+        // Create a fallback campaign with a local ID instead
+        const fallbackCampaign = {
+          id: Date.now().toString(), // Fallback to timestamp ID
+          title: formData.campaignTitle,
+          category: formData.campaignCategory,
+          description: formData.campaignDescription,
+          goalAmount: parseFloat(formData.fundraisingGoal),
+          currentAmount: 0,
+          duration: durationInDays,
+          endDate: new Date(Date.now() + durationInDays * 24 * 60 * 60 * 1000).toISOString(),
+          creatorName: `${formData.firstName} ${formData.lastName}`,
+          creatorEmail: formData.email,
+          pdfApplication: cloudinaryUrl,
+          verified: false,
+          donors: 0,
+          imageUrl: imageReference,
+          acceptCrypto: formData.acceptCrypto,
+          ethWalletAddress: formData.ethWalletAddress || "Failed to get wallet",
+          ethEquivalent: ethEquivalent,
+          ethRate: ethRate,
+          blockchainError: blockchainError.message
+        };
+        
+        // Save fallback campaign to backend and localStorage
+        try {
+          await campaignService.saveCampaign(fallbackCampaign);
+          
+          const existingCampaigns = JSON.parse(localStorage.getItem('campaigns') || '[]');
           if (existingCampaigns.length >= 5) {
             existingCampaigns.sort((a, b) => new Date(b.id) - new Date(a.id));
             existingCampaigns.splice(5);
           }
-          
-          existingCampaigns.push(campaign);
+          existingCampaigns.push(fallbackCampaign);
           localStorage.setItem('campaigns', JSON.stringify(existingCampaigns));
           
-          // Still show success but with a warning
           setPdfData({ ...pdfResult, cloudinaryUrl });
           setSubmitSuccess(true);
           setShowPdfPreview(true);
-        } catch (storageError) {
-          throw new Error("Both API and localStorage failed");
+          setSubmitError("Warning: Campaign created in database only. Blockchain creation failed.");
+        } catch (error) {
+          throw new Error("Failed to create campaign: " + error.message);
         }
       }
   

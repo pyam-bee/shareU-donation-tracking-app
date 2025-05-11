@@ -10,14 +10,25 @@ import CampaignApplication from './Pages/CampaignApplication';
 import Contact from './Pages/Contact';
 import Dashboard from './Pages/Dashboard';
 import AdminPage from './Pages/AdminPage';
+import TransactionHistory from './Pages/TransactionHistory';
 
 // Create a layout component that conditionally renders the Navbar
 const AppLayout = () => {
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith('/admin');
+  const isAuthRoute = location.pathname === '/login' || location.pathname === '/signup';
+  
+  // Choose background based on route type
+  let backgroundClass = "min-h-screen bg-charity-main";
+  
+  if (isAdminRoute) {
+    backgroundClass = "min-h-screen bg-admin-gradient";
+  } else if (isAuthRoute) {
+    backgroundClass = "min-h-screen bg-charity-warm";
+  }
   
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={backgroundClass}>
       {!isAdminRoute && <Navbar />}
       <Routes>
         <Route path='/' element={<Home />} />
@@ -27,6 +38,7 @@ const AppLayout = () => {
         <Route path='/contact' element={<Contact />}/>
         <Route path='/dashboard' element={<Dashboard />}/>
         <Route path='/campaigns' element={<CampaignApplication />}/>
+        <Route path="/transactions" element={<TransactionHistory />} />
         
         {/* Admin routes with layout */}
         <Route path='/admin' element={

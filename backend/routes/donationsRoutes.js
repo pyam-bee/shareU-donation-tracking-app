@@ -1,14 +1,16 @@
-// import express from 'express';
-// import {
-//   getDonationPage,
-//   processDonation,
-//   getDonationStats
-// } from '../controllers/donationController.js';
+// Place this file in your backend/routes folder
+import express from 'express';
+import { donationController } from '../controllers/donationController.js';
 
-// const router = express.Router();
+const router = express.Router();
 
-// router.get('/page/:slug', getDonationPage);
-// router.post('/process', processDonation);
-// router.get('/stats/:campaignId', getDonationStats);
+// Record a new donation
+router.post('/', donationController.recordDonation);
 
-// export default router;
+// Get all donations
+router.get('/', donationController.getAllDonations);
+
+// Get donations for a specific campaign
+router.get('/campaign/:campaignId', donationController.getDonationsByCampaign);
+
+export default router;

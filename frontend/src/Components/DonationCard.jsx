@@ -19,6 +19,28 @@ const DonationCard = ({ donation, onDonate }) => {
     });
   };
   
+  // Calculate time remaining
+  const getTimeRemaining = (endDateString) => {
+    const now = new Date();
+    const endDate = new Date(endDateString);
+    const timeDiff = endDate - now;
+    
+    if (timeDiff <= 0) {
+      return 'Ended';
+    }
+    
+    const days = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+    
+    if (days > 1) {
+      return `${days} days left`;
+    } else if (days === 1) {
+      return '1 day left';
+    } else {
+      const hours = Math.floor((timeDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      return `${hours} hours left`;
+    }
+  };
+  
   // Handle donation submit
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -49,6 +71,35 @@ const DonationCard = ({ donation, onDonate }) => {
     return `${hash.substring(0, 10)}...${hash.substring(hash.length - 8)}`;
   };
   
+  // Determine the transaction explorer URL based on network (could be improved with context)
+  const getExplorerUrl = (hash) => {
+    // For local development chain
+    if (window.ethereum && window.ethereum.networkVersion === '1337') {
+      return `http://localhost:7545/tx/${hash}`;
+    }
+    // For Goerli testnet
+    else if (window.ethereum && window.ethereum.networkVersion === '5') {
+      return `https://goerli.etherscan.io/tx/${hash}`;
+    }
+    // Default to Ethereum mainnet
+    return `https://etherscan.io/tx/${hash}`;
+  };
+  
+  // Determine badge color based on category
+  const getBadgeColor = (category) => {
+    if (category === 'Blockchain') {
+      return 'bg-purple-600';
+    } else if (category === 'Medical') {
+      return 'bg-red-600';
+    } else if (category === 'Education') {
+      return 'bg-green-600';
+    } else if (category === 'Environment') {
+      return 'bg-teal-600';
+    } else {
+      return 'bg-blue-600';
+    }
+  };
+  
   return (
     <div className="bg-white rounded-lg overflow-hidden shadow-lg border border-gray-200">
       {/* Image */}
@@ -58,9 +109,19 @@ const DonationCard = ({ donation, onDonate }) => {
           alt={donation.title}
           className="w-full h-full object-cover"
         />
-        <div className="absolute top-3 right-3 bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded">
+        <div className={`absolute top-3 right-3 ${getBadgeColor(donation.category)} text-white text-xs font-bold px-2 py-1 rounded`}>
           {donation.category}
         </div>
+        
+        {/* Add blockchain badge if applicable */}
+        {donation.isBlockchain && (
+          <div className="absolute top-3 left-3 bg-purple-700 text-white text-xs font-bold px-2 py-1 rounded flex items-center">
+            <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M10 0L5 9l5 3.5L15 9 10 0zM5 11l5 9 5-9-5 3.5L5 11z" />
+            </svg>
+            Blockchain
+          </div>
+        )}
       </div>
       
       {/* Content */}
@@ -84,7 +145,7 @@ const DonationCard = ({ donation, onDonate }) => {
           <div className="flex justify-between text-xs text-gray-500 mt-1">
             <span>{donation.donors} donors</span>
             {donation.endDate && (
-              <span>Ends: {formatDate(donation.endDate)}</span>
+              <span>{getTimeRemaining(donation.endDate)}</span>
             )}
           </div>
         </div>
@@ -135,7 +196,7 @@ const DonationCard = ({ donation, onDonate }) => {
               <p className="text-xs text-green-700 mt-1">
                 Transaction: {formatTxHash(txHash)}
                 <button 
-                  onClick={() => window.open(`https://localhost:7545/tx/${txHash}`, '_blank')} 
+                  onClick={() => window.open(getExplorerUrl(txHash), '_blank')} 
                   className="ml-2 text-blue-600 hover:underline"
                 >
                   View
@@ -144,6 +205,15 @@ const DonationCard = ({ donation, onDonate }) => {
             </div>
           )}
         </form>
+        
+        {/* Owner address for blockchain campaigns */}
+        {donation.isBlockchain && donation.ethWalletAddress && (
+          <div className="mt-3 pt-3 border-t border-gray-200">
+            <p className="text-xs text-gray-500">
+              Campaign owner: {donation.ethWalletAddress.substring(0, 6)}...{donation.ethWalletAddress.substring(donation.ethWalletAddress.length - 4)}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

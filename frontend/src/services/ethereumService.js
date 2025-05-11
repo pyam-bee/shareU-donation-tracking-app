@@ -1,4 +1,5 @@
 // services/ethereumService.js
+import { transactionService } from './transactionService';
 
 const ethereumService = {
   // Store the recipient address
@@ -26,8 +27,8 @@ const ethereumService = {
   async isGanacheNetwork() {
     try {
       const chainId = await window.ethereum.request({ method: 'eth_chainId' });
-      // Ganache typically uses chain ID 1337 (0x539)
-      return chainId === '0x539' || chainId === '0x539'; // Check both formats
+      // Ganache App uses chain ID 1337 (0x539)
+      return chainId === '0x539';
     } catch (error) {
       return false;
     }
@@ -100,7 +101,7 @@ const ethereumService = {
   },
   
   // Make a donation transaction
-  async donate(amount, recipientAddress) {
+  async donate(amount, recipientAddress, campaignData = {}) {
     if (!this.isMetaMaskInstalled()) {
       throw new Error('MetaMask is not installed');
     }
@@ -137,6 +138,17 @@ const ethereumService = {
         gasPrice: gasPrice // Only set for non-Ganache networks
       };
       
+      // Store transaction data for tracking
+      const pendingTxData = {
+        type: 'direct-donation',
+        amount: amount,
+        amountWei: parseInt(Number(amount) * 1e18).toString(),
+        fromAddress: fromAddress,
+        toAddress: toAddress,
+        timestamp: Date.now(),
+        ...campaignData  // Include any campaign data passed in
+      };
+      
       // Log transaction details for debugging
       console.log('Sending transaction:', transactionParameters);
       
@@ -146,13 +158,49 @@ const ethereumService = {
         params: [transactionParameters],
       });
       
+      // Store pending transaction
+      transactionService.storePendingTransaction(txHash, pendingTxData);
+      
+      // Create a provider to track transaction
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      
+      // Wait for confirmation
+      provider.once(txHash, (transaction) => {
+        console.log('Transaction confirmed:', transaction);
+        transactionService.updateTransactionStatus(txHash, 'confirmed', transaction);
+      });
+      
       console.log('Transaction sent:', txHash);
       return txHash;
     } catch (error) {
       console.error('Error donating:', error);
       throw error;
     }
+  },
+  
+  // Get transaction details
+  async getTransactionDetails(txHash) {
+    if (!this.isMetaMaskInstalled()) {
+      throw new Error('MetaMask is not installed');
+    }
+    
+    try {
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const tx = await provider.getTransaction(txHash);
+      const receipt = await provider.getTransactionReceipt(txHash);
+      
+      return {
+        transaction: tx,
+        receipt: receipt
+      };
+    } catch (error) {
+      console.error('Error getting transaction details:', error);
+      throw error;
+    }
   }
 };
+
+// Add ethers import at the top
+import { ethers } from 'ethers';
 
 export { ethereumService };

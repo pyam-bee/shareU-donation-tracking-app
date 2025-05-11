@@ -6,6 +6,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import authRoutes from "./routes/authRoutes.js";
 import "dotenv/config";
+import donationRoutes from "./routes/donationsRoutes.js"
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -149,10 +150,11 @@ app.delete('/api/campaigns/:id', (req, res) => {
 
 // Routes
 app.use("/api/auth", authRoutes);
-// app.use("/api/donations", donationRoutes);
+app.use('/api/donations', donationRoutes);
 
 console.log(`MongoDB URI: ${process.env.MONGO_URI}`);
 
 app.listen(port, () => {
   console.log(`Server started at port ${port}`);
 });
+
