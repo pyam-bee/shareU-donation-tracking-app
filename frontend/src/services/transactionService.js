@@ -4,6 +4,11 @@ import { ethers } from 'ethers';
 class TransactionService {
   constructor() {
     this.storageKey = 'donation_app_transactions';
+    this.notificationCallback = null;
+  }
+
+   setNotificationCallback(callback) {
+    this.notificationCallback = callback;
   }
 
   // Get all transactions from localStorage
@@ -63,6 +68,30 @@ class TransactionService {
     } catch (error) {
       console.error('Error storing transaction:', error);
       return false;
+    }
+  }
+
+  async initialize() {
+    if (window.ethereum) {
+      try {
+        this.provider = new ethers.providers.Web3Provider(window.ethereum);
+        await window.ethereum.request({ method: 'eth_requestAccounts' });
+        this.signer = this.provider.getSigner();
+        return true;
+      } catch (error) {
+        console.error('Error initializing ethereum service:', error);
+        this.notify('Failed to connect to your wallet', 'ERROR');
+        return false;
+      }
+    } else {
+      this.notify('Ethereum wallet not detected. Please install MetaMask or another wallet provider.', 'WARNING');
+      return false;
+    }
+  }
+
+  notify(message, type = 'INFO', duration = 5000) {
+    if (this.notificationCallback) {
+      this.notificationCallback(message, type, duration);
     }
   }
 
@@ -209,6 +238,8 @@ class TransactionService {
         try {
           const amountWei = ethers.BigNumber.from(tx.data.amountWei);
           totalWei = totalWei.add(amountWei);
+
+          this.notify('Transaction initiated. Please confirm in your wallet...', 'INFO');
         } catch (error) {
           console.error('Error parsing donation amount:', error);
         }
@@ -225,7 +256,9 @@ class TransactionService {
       const recentDonations = confirmedDonations
         .sort((a, b) => b.timestamp - a.timestamp)
         .slice(0, 5);
-      
+
+      this.notify('Transaction sent! Waiting for confirmation...', 'INFO');
+      this.notify(`Transaction confirmed! Thank you for your donation.`, 'SUCCESS', 7000);
       return {
         totalDonations: confirmedDonations.length,
         totalAmount,
@@ -234,8 +267,10 @@ class TransactionService {
         averageDonationFormatted,
         recentDonations
       };
+      
     } catch (error) {
       console.error('Error calculating donation stats:', error);
+      this.notify(`Transaction failed: ${error.message || 'Unknown error'}`, 'ERROR');
       return null;
     }
   }

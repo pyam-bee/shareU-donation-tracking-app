@@ -48,12 +48,12 @@ const Contact = () => {
   ];
 
   return (
-    <div className="bg-white min-h-screen">
+    <div className="bg-charity-warm min-h-screen">
       {/* Header Banner */}
-      <section className="bg-blue-50 py-12">
+      <section className="bg-charity-warm text-white py-12">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <h1 className="text-3xl md:text-4xl font-bold text-center mb-2">Contact Us</h1>
-          <p className="text-gray-600 text-center mb-0">We'd love to hear from you. Get in touch with our team.</p>
+          <p className="text-white text-center mb-0">We'd love to hear from you. Get in touch with our team.</p>
         </div>
       </section>
 

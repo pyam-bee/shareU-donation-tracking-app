@@ -128,30 +128,30 @@ const TransactionHistory = () => {
           <h1 className="text-3xl font-bold mt-2">
             Transactions for Campaign: {campaign.title}
           </h1>
-          <div className="mt-2 text-gray-600">
+          <div className="mt-2 text-white">
             <p>Total Raised: {formatEth(campaign.amountRaised.toString())}</p>
             <p>Status: {campaign.isClosed ? 'Closed' : 'Active'}</p>
           </div>
         </div>
       ) : (
-        <h1 className="text-3xl font-bold mb-6">Transaction History</h1>
+        <h1 className="text-3xl font-bold mb-6 text-white">Transaction History</h1>
       )}
 
       {/* Stats Section (only show on main transaction page) */}
       {!campaignId && stats && (
-        <div className="bg-blue-50 rounded-lg p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Donation Statistics</h2>
+        <div className="bg-charity-warm rounded-lg p-6 mb-6">
+          <h2 className="text-xl font-semibold mb-4 text-white">Donation Statistics</h2>
           <div className="grid md:grid-cols-3 gap-4">
             <div className="bg-white rounded-lg p-4 shadow">
-              <h3 className="text-gray-500">Total Donations</h3>
+              <h3 className="text-gray-700">Total Donations</h3>
               <p className="text-2xl font-bold">{stats.totalDonations}</p>
             </div>
             <div className="bg-white rounded-lg p-4 shadow">
-              <h3 className="text-gray-500">Total Amount</h3>
+              <h3 className="text-gray-700">Total Amount</h3>
               <p className="text-2xl font-bold">{stats.totalAmountFormatted}</p>
             </div>
             <div className="bg-white rounded-lg p-4 shadow">
-              <h3 className="text-gray-500">Average Donation</h3>
+              <h3 className="text-gray-700">Average Donation</h3>
               <p className="text-2xl font-bold">{stats.averageDonationFormatted}</p>
             </div>
           </div>
@@ -161,7 +161,7 @@ const TransactionHistory = () => {
       {/* Filter Controls (not shown for campaign-specific view) */}
       {!campaignId && (
         <div className="mb-6">
-          <label htmlFor="filter" className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="filter" className="block text-sm font-medium text-white mb-2">
             Filter Transactions:
           </label>
           <select
@@ -199,8 +199,8 @@ const TransactionHistory = () => {
             </div>
           ) : (
             <div className="bg-gray-50 rounded-lg p-12 text-center">
-              <h3 className="text-xl font-medium text-gray-900">No transactions found</h3>
-              <p className="mt-2 text-gray-600">
+              <h3 className="text-xl font-medium text-white">No transactions found</h3>
+              <p className="mt-2 text-white">
                 {filter === 'my-transactions' && !account
                   ? 'Please connect your wallet to view your transactions.'
                   : 'There are no transactions matching your current filter.'}

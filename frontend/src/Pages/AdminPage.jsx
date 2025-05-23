@@ -504,7 +504,46 @@ const CampaignReview = () => {
     fetchCampaigns();
   }, [location]);
   
-  const handleApprove = (id) => {
+  const handleApprove = async (id) => {
+    try {
+      // API call to approve campaign
+      const response = await fetch(`/api/campaigns/${id}/approve`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+
+      if (response.ok) {
+        // Remove from pending list or update status
+        setPendingCampaigns(pendingCampaigns.filter(campaign => campaign.id !== campaignId));
+        
+        // Show success notification
+        addNotification(
+          'Campaign has been approved successfully',
+          'SUCCESS',
+          5000
+        );
+        
+        // Other logic (like notification to campaign creator) would be done on the server
+      } else {
+        const errorData = await response.json();
+        addNotification(
+          `Failed to approve campaign: ${errorData.message}`,
+          'ERROR',
+          7000
+        );
+      }
+    } catch (error) {
+      console.error('Error approving campaign:', error);
+      addNotification(
+        'An error occurred while approving the campaign',
+        'ERROR',
+        7000
+      );
+    }
+
     const updatedCampaigns = campaigns.map(c => 
       c.id === id ? { ...c, verified: true } : c
     );
@@ -519,7 +558,7 @@ const CampaignReview = () => {
     alert('Campaign approved successfully!');
   };
   
-  const handleReject = (id) => {
+  const handleReject = async (id) => {
     if (window.confirm('Are you sure you want to reject this campaign? This action cannot be undone.')) {
       const updatedCampaigns = campaigns.filter(c => c.id !== id);
       
@@ -532,6 +571,46 @@ const CampaignReview = () => {
       }
       
       alert('Campaign rejected successfully!');
+    }
+
+     try {
+      // API call to reject campaign
+      const response = await fetch(`/api/campaigns/${campaignId}/reject`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({ reason }),
+      });
+
+      if (response.ok) {
+        // Remove from pending list or update status
+        setPendingCampaigns(pendingCampaigns.filter(campaign => campaign.id !== campaignId));
+        
+        // Show success notification
+        addNotification(
+          'Campaign has been rejected',
+          'INFO',
+          5000
+        );
+        
+        // Other logic would be done on the server
+      } else {
+        const errorData = await response.json();
+        addNotification(
+          `Failed to reject campaign: ${errorData.message}`,
+          'ERROR',
+          7000
+        );
+      }
+    } catch (error) {
+      console.error('Error rejecting campaign:', error);
+      addNotification(
+        'An error occurred while rejecting the campaign',
+        'ERROR',
+        7000
+      );
     }
   };
   

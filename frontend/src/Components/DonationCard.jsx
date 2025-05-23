@@ -159,8 +159,8 @@ const DonationCard = ({ donation, onDonate }) => {
                 type="number"
                 value={donationAmount}
                 onChange={(e) => setDonationAmount(e.target.value)}
-                placeholder="Amount"
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-l-lg focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter you amount"
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-l-lg focus:ring-blue-500 focus:border-blue-500 text-black"
                 step="0.001"
                 min="0.001"
               />

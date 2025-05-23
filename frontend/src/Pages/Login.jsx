@@ -9,6 +9,7 @@ const Login = () => {
     password: ''
   });
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -44,6 +45,7 @@ const Login = () => {
 
   const handleGoogleSignIn = async (response) => {
     setLoading(true);
+    setError('');
     try {
       // Decode the JWT token to extract user info including profile picture
       const jwtToken = response.credential;
@@ -70,11 +72,15 @@ const Login = () => {
       // Store enhanced user info
       localStorage.setItem('user', JSON.stringify(enhancedUser));
       
-      // Redirect to home page
-      navigate('/');
+      // Show success message
+      setSuccess('User logged in successfully!');
       
-      // Refresh the page to update navbar state
-      window.location.reload();
+      // Redirect to home page after a short delay
+      setTimeout(() => {
+        navigate('/');
+        // Refresh the page to update navbar state
+        window.location.reload();
+      }, 1000);
     } catch (error) {
       console.error('Google login failed', error);
       setError(error.response?.data?.message || 'Google login failed. Please try again.');
@@ -93,6 +99,7 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
     setLoading(true);
     
     try {
@@ -118,15 +125,20 @@ const Login = () => {
         }));
       }
       
-      // Redirect based on role
-      if (isAdmin) {
-        navigate('/admin/dashboard');
-      } else {
-        navigate('/');
-      }
+      // Show success message
+      setSuccess('User logged in successfully!');
       
-      // Refresh the page to update navbar state
-      window.location.reload();
+      // Redirect based on role after a short delay
+      setTimeout(() => {
+        if (isAdmin) {
+          navigate('/admin/dashboard');
+        } else {
+          navigate('/');
+        }
+        
+        // Refresh the page to update navbar state
+        window.location.reload();
+      }, 1500);
     } catch (error) {
       console.error('Login failed', error);
       setError(error.response?.data?.message || 'Login failed. Please check your credentials.');
@@ -146,6 +158,11 @@ const Login = () => {
         {error && (
           <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4" role="alert">
             <p>{error}</p>
+          </div>
+        )}
+        {success && (
+          <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4" role="alert">
+            <p>{success}</p>
           </div>
         )}
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>

@@ -11,6 +11,9 @@ import Contact from './Pages/Contact';
 import Dashboard from './Pages/Dashboard';
 import AdminPage from './Pages/AdminPage';
 import TransactionHistory from './Pages/TransactionHistory';
+//import { NotificationProvider } from './Components/NotificationContext';
+//import { TransactionProvider } from './Components/TransactionProvider';
+//import { WebSocketProvider } from './Components/WebSocketProvider';
 
 // Create a layout component that conditionally renders the Navbar
 const AppLayout = () => {
@@ -19,7 +22,7 @@ const AppLayout = () => {
   const isAuthRoute = location.pathname === '/login' || location.pathname === '/signup';
   
   // Choose background based on route type
-  let backgroundClass = "min-h-screen bg-charity-main";
+  let backgroundClass = "bg-charity-warm";
   
   if (isAdminRoute) {
     backgroundClass = "min-h-screen bg-admin-gradient";
@@ -84,7 +87,7 @@ const App = () => {
 
   return (
     <BrowserRouter>
-      <AppLayout />
+            <AppLayout />
     </BrowserRouter>
   );
 };

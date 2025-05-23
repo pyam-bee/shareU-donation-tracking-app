@@ -74,7 +74,7 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="bg-gradient-to-r from-purple-100 to-blue-50 shadow-md">
+    <nav className="bg-gradient-to-br from-gray-900 to-gray-900 text-white shadow-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
@@ -85,19 +85,19 @@ const Navbar = () => {
 
           {/* Desktop menu */}
           <div className="hidden sm:ml-6 sm:flex sm:items-center space-x-4">
-            <Link to="/" className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
+            <Link to="/" className="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-white hover:bg-[#00A676]">
               Home
             </Link>
-            <Link to="/donations" className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
+            <Link to="/donations" className="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-white hover:bg-[#00A676]">
               Donations
             </Link>
-            <Link to="/campaigns" className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
+            <Link to="/campaigns" className="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-white hover:bg-[#00A676]">
               Campaigns
             </Link>
-            <Link to="/transactions" className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
+            <Link to="/transactions" className="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-white hover:bg-[#00A676]">
               Transactions
             </Link>
-            <Link to="/contact" className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
+            <Link to="/contact" className="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-white hover:bg-[#00A676]">
               Contact
             </Link>
             

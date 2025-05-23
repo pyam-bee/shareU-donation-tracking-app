@@ -10,7 +10,7 @@ module.exports = {
     ganache: {
       url: "http://127.0.0.1:7545",
       chainId: 1337,
-      accounts: ["0xdcd69c5cbe68fadb9d32f31798fd987c89621386e78911a35740202a0d130136"],
+      accounts: ["0xac0d0a4d9b2a8c1415e9c9cd8c44c6340c2646f53f1420072716ee2df200a4c5"],
     },
   },
   paths: {
