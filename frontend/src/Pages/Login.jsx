@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -108,22 +108,11 @@ const Login = () => {
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('userEmail', formData.email);
       
-      // Check if user is admin
-      const isAdmin = checkAdminAccess(formData.email);
+      // Check if user is admin from backend response
+      const isAdmin = response.data.user.isAdmin || false;
       
       // Store user info with admin flag
-      if (response.data.user) {
-        const userWithRole = {
-          ...response.data.user,
-          isAdmin
-        };
-        localStorage.setItem('user', JSON.stringify(userWithRole));
-      } else {
-        localStorage.setItem('user', JSON.stringify({ 
-          email: formData.email,
-          isAdmin
-        }));
-      }
+      localStorage.setItem('user', JSON.stringify(response.data.user));
       
       // Show success message
       setSuccess('User logged in successfully!');
@@ -211,6 +200,29 @@ const Login = () => {
             </div>
           </div>
         </form>
+        
+        {/* Admin Access Link */}
+        <div className="text-center mt-6">
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-gray-50 text-gray-500">Admin Access</span>
+            </div>
+          </div>
+          <div className="mt-4">
+            <Link 
+              to="/admin/login"
+              className="inline-flex items-center px-4 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition duration-200"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              Admin Login
+            </Link>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -39,7 +39,15 @@ export const login = async (req, res) => {
     }
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
-    res.json({ token, user: { id: user._id, email: user.email, name: user.name } });
+    res.json({ 
+      token, 
+      user: { 
+        id: user._id, 
+        email: user.email, 
+        name: user.name,
+        isAdmin: user.isAdmin || false // Include admin status
+      } 
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -76,7 +84,8 @@ export const googleSignIn = async (req, res) => {
         name,
         email,
         googleId,
-        profilePicture: picture
+        profilePicture: picture,
+        isAdmin: false // Default to false for Google sign-ins
       });
       await user.save();
     }
@@ -91,11 +100,63 @@ export const googleSignIn = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        profilePicture: user.profilePicture
+        profilePicture: user.profilePicture,
+        isAdmin: user.isAdmin || false // Include admin status
       }
     });
   } catch (error) {
     console.error("Google sign-in error:", error);
     res.status(500).json({ message: "Failed to authenticate with Google" });
+  }
+};
+
+// Admin-only login endpoint
+export const adminLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    // Check if it's the specific admin credentials
+    if (email !== 'admin@gmail.com' || password !== 'admin123') {
+      return res.status(401).json({ message: "Access denied. Admin credentials required." });
+    }
+    
+    // Check if admin user exists in database
+    let user = await User.findOne({ email: 'admin@gmail.com' });
+    
+    if (!user) {
+      // Create admin user if doesn't exist
+      user = new User({
+        name: 'Admin',
+        email: 'admin@gmail.com',
+        password: 'admin123',
+        isAdmin: true
+      });
+      await user.save();
+    } else {
+      // Verify password for existing admin
+      const isValidPassword = await bcrypt.compare(password, user.password);
+      if (!isValidPassword) {
+        return res.status(401).json({ message: "Invalid admin credentials" });
+      }
+      
+      // Ensure admin flag is set
+      if (!user.isAdmin) {
+        user.isAdmin = true;
+        await user.save();
+      }
+    }
+
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
+    res.json({ 
+      token, 
+      user: { 
+        id: user._id, 
+        email: user.email, 
+        name: user.name,
+        isAdmin: user.isAdmin
+      } 
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 };

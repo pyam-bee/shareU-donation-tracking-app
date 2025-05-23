@@ -11,6 +11,7 @@ import Contact from './Pages/Contact';
 import Dashboard from './Pages/Dashboard';
 import AdminPage from './Pages/AdminPage';
 import TransactionHistory from './Pages/TransactionHistory';
+import AdminLogin from './Pages/AdminLogin';
 //import { NotificationProvider } from './Components/NotificationContext';
 //import { TransactionProvider } from './Components/TransactionProvider';
 //import { WebSocketProvider } from './Components/WebSocketProvider';
@@ -42,6 +43,7 @@ const AppLayout = () => {
         <Route path='/dashboard' element={<Dashboard />}/>
         <Route path='/campaigns' element={<CampaignApplication />}/>
         <Route path="/transactions" element={<TransactionHistory />} />
+        <Route path="/admin/login" element={<AdminLogin />} />
         
         {/* Admin routes with layout */}
         <Route path='/admin' element={

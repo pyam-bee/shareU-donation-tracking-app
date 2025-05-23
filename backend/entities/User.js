@@ -10,6 +10,7 @@ const userSchema = new mongoose.Schema({
   } },
   googleId: { type: String, unique: true, sparse: true },
   profilePicture: { type: String },
+  isAdmin: { type: Boolean, default: false }, // Add admin field
   createdAt: { type: Date, default: Date.now }
 });
 
