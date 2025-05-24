@@ -160,3 +160,71 @@ export const adminLogin = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// Get all users (admin only)
+export const getAllUsers = async (req, res) => {
+  try {
+    const users = await User.find({}, '-password'); // Exclude password field
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ message: 'Failed to fetch users' });
+  }
+};
+
+// Disable/Enable user (admin only)
+export const disableUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await User.findById(id);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Toggle user status (assuming you add an 'isActive' field to your User model)
+    user.isActive = !user.isActive;
+    await user.save();
+    
+    res.json({ 
+      message: `User ${user.isActive ? 'enabled' : 'disabled'} successfully`,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        isActive: user.isActive
+      }
+    });
+  } catch (error) {
+    console.error('Error updating user status:', error);
+    res.status(500).json({ message: 'Failed to update user status' });
+  }
+};
+
+// Update user (admin only)
+export const updateUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    
+    // Remove sensitive fields that shouldn't be updated via this route
+    delete updates.password;
+    delete updates._id;
+    delete updates.__v;
+    
+    const user = await User.findByIdAndUpdate(
+      id, 
+      updates, 
+      { new: true, runValidators: true }
+    ).select('-password');
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    res.json(user);
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({ message: 'Failed to update user' });
+  }
+};

@@ -64,6 +64,10 @@ class TransactionService {
       
       // Save to localStorage
       localStorage.setItem(this.storageKey, JSON.stringify(transactions));
+      
+      // Notify about pending transaction
+      this.notify('Transaction initiated. Please confirm in your wallet...', 'INFO');
+      
       return true;
     } catch (error) {
       console.error('Error storing transaction:', error);
@@ -127,6 +131,14 @@ class TransactionService {
       
       // Save to localStorage
       localStorage.setItem(this.storageKey, JSON.stringify(transactions));
+      
+      // Send appropriate notification based on status
+      if (status === 'confirmed') {
+        this.notify('Transaction confirmed! Thank you for your donation.', 'SUCCESS', 7000);
+      } else if (status === 'failed') {
+        this.notify('Transaction failed. Please try again.', 'ERROR');
+      }
+      
       return true;
     } catch (error) {
       console.error('Error updating transaction:', error);
@@ -162,6 +174,72 @@ class TransactionService {
       tx.data.fromAddress && 
       tx.data.fromAddress.toLowerCase() === userAddress.toLowerCase()
     );
+  }
+
+  // Get user-specific donation statistics - NEW METHOD
+  getUserDonationStats(userAddress) {
+    if (!userAddress) {
+      return {
+        totalDonations: 0,
+        totalAmountFormatted: '0 ETH',
+        averageDonationFormatted: '0 ETH'
+      };
+    }
+
+    try {
+      const transactions = this.getAllTransactions();
+      
+      // Filter for user's confirmed donation transactions
+      const userDonations = transactions.filter(tx => 
+        tx.status === 'confirmed' && 
+        (tx.data?.type === 'blockchain-donation' || tx.data?.type === 'direct-donation') &&
+        tx.data?.fromAddress?.toLowerCase() === userAddress.toLowerCase() &&
+        tx.data?.amountWei
+      );
+      
+      if (userDonations.length === 0) {
+        return {
+          totalDonations: 0,
+          totalAmountFormatted: '0 ETH',
+          averageDonationFormatted: '0 ETH'
+        };
+      }
+      
+      // Calculate total amount in Wei
+      let totalAmountWei = ethers.BigNumber.from('0');
+      
+      userDonations.forEach(tx => {
+        try {
+          const amount = ethers.BigNumber.from(tx.data.amountWei);
+          totalAmountWei = totalAmountWei.add(amount);
+        } catch (error) {
+          console.error('Error parsing donation amount:', tx.data.amountWei, error);
+        }
+      });
+
+      // Calculate average
+      const averageAmountWei = totalAmountWei.div(ethers.BigNumber.from(userDonations.length));
+
+      // Format amounts
+      const totalAmountFormatted = parseFloat(ethers.utils.formatEther(totalAmountWei)).toFixed(4) + ' ETH';
+      const averageDonationFormatted = parseFloat(ethers.utils.formatEther(averageAmountWei)).toFixed(4) + ' ETH';
+
+      return {
+        totalDonations: userDonations.length,
+        totalAmountFormatted,
+        averageDonationFormatted,
+        totalAmountWei: totalAmountWei.toString(),
+        averageAmountWei: averageAmountWei.toString()
+      };
+      
+    } catch (error) {
+      console.error('Error calculating user donation stats:', error);
+      return {
+        totalDonations: 0,
+        totalAmountFormatted: '0 ETH',
+        averageDonationFormatted: '0 ETH'
+      };
+    }
   }
 
   // Monitor pending transactions
@@ -208,7 +286,7 @@ class TransactionService {
     }
   }
 
-  // Get donation statistics
+  // Get overall donation statistics
   getDonationStats() {
     try {
       const transactions = this.getAllTransactions();
@@ -216,8 +294,8 @@ class TransactionService {
       // Only include confirmed donation transactions
       const confirmedDonations = transactions.filter(tx => 
         tx.status === 'confirmed' && 
-        (tx.data.type === 'blockchain-donation' || tx.data.type === 'direct-donation') &&
-        tx.data.amountWei
+        (tx.data?.type === 'blockchain-donation' || tx.data?.type === 'direct-donation') &&
+        tx.data?.amountWei
       );
       
       if (confirmedDonations.length === 0) {
@@ -238,8 +316,6 @@ class TransactionService {
         try {
           const amountWei = ethers.BigNumber.from(tx.data.amountWei);
           totalWei = totalWei.add(amountWei);
-
-          this.notify('Transaction initiated. Please confirm in your wallet...', 'INFO');
         } catch (error) {
           console.error('Error parsing donation amount:', error);
         }
@@ -257,8 +333,6 @@ class TransactionService {
         .sort((a, b) => b.timestamp - a.timestamp)
         .slice(0, 5);
 
-      this.notify('Transaction sent! Waiting for confirmation...', 'INFO');
-      this.notify(`Transaction confirmed! Thank you for your donation.`, 'SUCCESS', 7000);
       return {
         totalDonations: confirmedDonations.length,
         totalAmount,
@@ -270,9 +344,18 @@ class TransactionService {
       
     } catch (error) {
       console.error('Error calculating donation stats:', error);
-      this.notify(`Transaction failed: ${error.message || 'Unknown error'}`, 'ERROR');
       return null;
     }
+  }
+
+  // Send transaction notification when transaction is sent
+  notifyTransactionSent(txHash) {
+    this.notify('Transaction sent! Waiting for confirmation...', 'INFO');
+  }
+
+  // Send transaction error notification
+  notifyTransactionError(error) {
+    this.notify(`Transaction failed: ${error.message || 'Unknown error'}`, 'ERROR');
   }
 }
 

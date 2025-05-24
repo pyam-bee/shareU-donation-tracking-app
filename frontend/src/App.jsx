@@ -12,9 +12,6 @@ import Dashboard from './Pages/Dashboard';
 import AdminPage from './Pages/AdminPage';
 import TransactionHistory from './Pages/TransactionHistory';
 import AdminLogin from './Pages/AdminLogin';
-//import { NotificationProvider } from './Components/NotificationContext';
-//import { TransactionProvider } from './Components/TransactionProvider';
-//import { WebSocketProvider } from './Components/WebSocketProvider';
 
 // Create a layout component that conditionally renders the Navbar
 const AppLayout = () => {
@@ -63,6 +60,12 @@ const AppLayout = () => {
             <AdminPage.UserManagement />
           </AdminPage.AdminLayout>
         }/>
+
+        <Route path='/admin/analytics' element={
+          <AdminPage.AdminLayout>
+            <AdminPage.Analytics />
+          </AdminPage.AdminLayout>
+        }/>
       </Routes>
     </div>
   );
@@ -70,22 +73,22 @@ const AppLayout = () => {
 
 const App = () => {
 
-  useEffect(() => {
-    // Initialize ethereum service with recipient address from configuration or environment
-    const initializeEthereumService = async () => {
-      try {
-        // You could get this from an API, local storage, or environment variables
-        const defaultWalletAddress = process.env.REACT_APP_DEFAULT_WALLET_ADDRESS;
-        if (defaultWalletAddress) {
-          ethereumService.setRecipientAddress(defaultWalletAddress);
-        }
-      } catch (error) {
-        console.error('Error initializing ethereum service:', error);
-      }
-    };
+  // useEffect(() => {
+  //   // Initialize ethereum service with recipient address from configuration or environment
+  //   const initializeEthereumService = async () => {
+  //     try {
+  //       // You could get this from an API, local storage, or environment variables
+  //       // const defaultWalletAddress = process.env.REACT_APP_DEFAULT_WALLET_ADDRESS;
+  //       if (defaultWalletAddress) {
+  //         ethereumService.setRecipientAddress(defaultWalletAddress);
+  //       }
+  //     } catch (error) {
+  //       console.error('Error initializing ethereum service:', error);
+  //     }
+  //   };
     
-    initializeEthereumService();
-  }, []);
+  //   initializeEthereumService();
+  // }, []);
 
   return (
     <BrowserRouter>

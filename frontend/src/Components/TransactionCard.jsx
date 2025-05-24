@@ -50,6 +50,31 @@ const TransactionCard = ({ transaction }) => {
         return type || 'Transaction';
     }
   };
+
+  // Get explorer URL for the current network - FIXED VERSION
+  const getExplorerUrl = () => {
+    if (window.ethereum && window.ethereum.networkVersion) {
+      const networkId = window.ethereum.networkVersion;
+      
+      switch (networkId) {
+        case '1':
+          return 'https://etherscan.io';
+        case '3':
+          return 'https://ropsten.etherscan.io';
+        case '4':
+          return 'https://rinkeby.etherscan.io';
+        case '5':
+          return 'https://goerli.etherscan.io';
+        case '11155111':
+          return 'https://sepolia.etherscan.io';
+        default:
+          return null; // Local networks don't have explorers
+      }
+    }
+    return null;
+  };
+
+  const explorerUrl = getExplorerUrl();
   
   return (
     <div className="bg-white rounded-lg shadow-md p-4 mb-4">
@@ -101,18 +126,54 @@ const TransactionCard = ({ transaction }) => {
           <span className="text-gray-500">Time:</span>
           <span>{timestamp ? formatDistanceToNow(new Date(timestamp), { addSuffix: true }) : 'N/A'}</span>
         </div>
+
+        {/* Gas Used (if available from receipt) */}
+        {transaction.receipt?.gasUsed && (
+          <div className="flex justify-between">
+            <span className="text-gray-500">Gas Used:</span>
+            <span>{Number(transaction.receipt.gasUsed).toLocaleString()}</span>
+          </div>
+        )}
+
+        {/* Block Number (if available from receipt) */}
+        {transaction.receipt?.blockNumber && (
+          <div className="flex justify-between">
+            <span className="text-gray-500">Block:</span>
+            <span>#{transaction.receipt.blockNumber}</span>
+          </div>
+        )}
       </div>
       
-      {/* View on Etherscan button */}
+      {/* Explorer link or local network indicator */}
       <div className="mt-4">
-        <a
-          href={`https://etherscan.io/tx/${txHash}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-blue-600 hover:text-blue-800 text-sm"
+        {explorerUrl ? (
+          <a
+            href={`${explorerUrl}/tx/${txHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:text-blue-800 text-sm"
+          >
+            View on Block Explorer →
+          </a>
+        ) : (
+          <div className="text-gray-500 text-sm">
+            Local Network - No block explorer available
+          </div>
+        )}
+      </div>
+
+      {/* Copy transaction hash button */}
+      <div className="mt-2">
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(txHash);
+            // You could add a toast notification here
+            alert('Transaction hash copied to clipboard!');
+          }}
+          className="text-gray-600 hover:text-gray-800 text-sm"
         >
-          View on Etherscan →
-        </a>
+          📋 Copy Transaction Hash
+        </button>
       </div>
     </div>
   );

@@ -16,6 +16,19 @@ const TransactionHistory = () => {
   const [campaign, setCampaign] = useState(null);
   const [stats, setStats] = useState(null);
 
+  // Force refresh transactions - this will help with showing current donations
+  const refreshTransactions = async () => {
+    try {
+      // Get fresh transaction data
+      await loadTransactions();
+      if (account) {
+        loadUserStats();
+      }
+    } catch (error) {
+      console.error('Error refreshing transactions:', error);
+    }
+  };
+
   // Connect to wallet and load transactions
   useEffect(() => {
     const init = async () => {
@@ -42,9 +55,6 @@ const TransactionHistory = () => {
           setCampaign(campaignData);
         }
         
-        // Load donation stats
-        const donationStats = transactionService.getDonationStats();
-        setStats(donationStats);
       } catch (error) {
         console.error('Error initializing transaction history:', error);
       } finally {
@@ -55,21 +65,55 @@ const TransactionHistory = () => {
     init();
   }, [campaignId]);
 
-  // Load transactions when filter changes
+  // Load transactions when filter changes or account changes
   useEffect(() => {
     loadTransactions();
+    // Load user-specific donation stats when account is available
+    if (account) {
+      loadUserStats();
+    }
   }, [filter, account, campaignId]);
 
-  // Load transactions based on current filter
+  // Auto-refresh transactions every 10 seconds to catch new donations
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshTransactions();
+    }, 10000); // Refresh every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [account, filter, campaignId]);
+
+  // Load user-specific donation statistics using service method
+  const loadUserStats = () => {
+    if (!account) {
+      setStats(null);
+      return;
+    }
+
+    try {
+      // Use the getUserDonationStats method from transactionService
+      const userStats = transactionService.getUserDonationStats(account);
+      setStats(userStats);
+    } catch (error) {
+      console.error('Error loading user stats:', error);
+      setStats({
+        totalDonations: 0,
+        totalAmountFormatted: '0 ETH',
+        averageDonationFormatted: '0 ETH'
+      });
+    }
+  };
+
+  // Load transactions based on current filter using proper service methods
   const loadTransactions = async () => {
     try {
       let filteredTransactions = [];
       
       if (campaignId) {
-        // Campaign-specific transactions
+        // Use service method for campaign-specific transactions
         filteredTransactions = transactionService.getTransactionsByCampaignId(campaignId);
       } else {
-        // Global transaction filters
+        // Global transaction filters using proper service methods
         switch (filter) {
           case 'my-transactions':
             filteredTransactions = account ? 
@@ -101,9 +145,13 @@ const TransactionHistory = () => {
         }
       }
       
+      // Sort transactions by timestamp (newest first)
+      filteredTransactions.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      
       setTransactions(filteredTransactions);
     } catch (error) {
       console.error('Error loading transactions:', error);
+      setTransactions([]);
     }
   };
 
@@ -117,8 +165,51 @@ const TransactionHistory = () => {
     }
   };
 
+  // Get network info for display
+  const getNetworkInfo = () => {
+    if (window.ethereum && window.ethereum.networkVersion) {
+      const networkId = window.ethereum.networkVersion;
+      
+      switch (networkId) {
+        case '1':
+          return { name: 'Ethereum Mainnet', color: 'text-green-600' };
+        case '3':
+          return { name: 'Ropsten Testnet', color: 'text-yellow-600' };
+        case '4':
+          return { name: 'Rinkeby Testnet', color: 'text-yellow-600' };
+        case '5':
+          return { name: 'Goerli Testnet', color: 'text-yellow-600' };
+        case '11155111':
+          return { name: 'Sepolia Testnet', color: 'text-yellow-600' };
+        case '5777':
+          return { name: 'Ganache Local', color: 'text-blue-600' };
+        case '1337':
+          return { name: 'Hardhat Local', color: 'text-blue-600' };
+        default:
+          return { name: `Network ${networkId}`, color: 'text-gray-600' };
+      }
+    }
+    return { name: 'Unknown Network', color: 'text-gray-600' };
+  };
+
+  const networkInfo = getNetworkInfo();
+
   return (
     <div className="container mx-auto py-8 px-4">
+      {/* Network indicator */}
+      <div className="mb-4 flex justify-between items-center">
+        <span className={`text-sm ${networkInfo.color} font-medium`}>
+          Connected to: {networkInfo.name}
+        </span>
+        {/* Manual refresh button */}
+        <button
+          onClick={refreshTransactions}
+          className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+        >
+          🔄 Refresh
+        </button>
+      </div>
+
       {/* Page Header */}
       {campaignId && campaign ? (
         <div className="mb-6">
@@ -137,24 +228,31 @@ const TransactionHistory = () => {
         <h1 className="text-3xl font-bold mb-6 text-white">Transaction History</h1>
       )}
 
-      {/* Stats Section (only show on main transaction page) */}
-      {!campaignId && stats && (
+      {/* User Stats Section (only show on main transaction page and when user is connected) */}
+      {!campaignId && account && stats && (
         <div className="bg-charity-warm rounded-lg p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4 text-white">Donation Statistics</h2>
+          <h2 className="text-xl font-semibold mb-4 text-white">Your Donation Statistics</h2>
           <div className="grid md:grid-cols-3 gap-4">
             <div className="bg-white rounded-lg p-4 shadow">
-              <h3 className="text-gray-700">Total Donations</h3>
+              <h3 className="text-gray-700">Your Total Donations</h3>
               <p className="text-2xl font-bold">{stats.totalDonations}</p>
             </div>
             <div className="bg-white rounded-lg p-4 shadow">
-              <h3 className="text-gray-700">Total Amount</h3>
+              <h3 className="text-gray-700">Total Amount Donated</h3>
               <p className="text-2xl font-bold">{stats.totalAmountFormatted}</p>
             </div>
             <div className="bg-white rounded-lg p-4 shadow">
-              <h3 className="text-gray-700">Average Donation</h3>
+              <h3 className="text-gray-700">Your Average Donation</h3>
               <p className="text-2xl font-bold">{stats.averageDonationFormatted}</p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Message when wallet not connected */}
+      {!campaignId && !account && (
+        <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-6">
+          <p>Connect your wallet to view your personal donation statistics.</p>
         </div>
       )}
 
@@ -181,6 +279,37 @@ const TransactionHistory = () => {
         </div>
       )}
 
+      {/* Transaction Summary */}
+      {transactions.length > 0 && (
+        <div className="bg-white rounded-lg p-4 mb-6 shadow">
+          <h3 className="text-lg font-semibold mb-2">Transaction Summary</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+              <p className="text-gray-500">Total</p>
+              <p className="font-medium">{transactions.length}</p>
+            </div>
+            <div>
+              <p className="text-gray-500">Confirmed</p>
+              <p className="font-medium text-green-600">
+                {transactions.filter(tx => tx.status === 'confirmed').length}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-500">Pending</p>
+              <p className="font-medium text-yellow-600">
+                {transactions.filter(tx => tx.status === 'pending').length}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-500">Failed</p>
+              <p className="font-medium text-red-600">
+                {transactions.filter(tx => tx.status === 'failed').length}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Loading State */}
       {loading ? (
         <div className="flex justify-center items-center py-12">
@@ -199,8 +328,8 @@ const TransactionHistory = () => {
             </div>
           ) : (
             <div className="bg-gray-50 rounded-lg p-12 text-center">
-              <h3 className="text-xl font-medium text-white">No transactions found</h3>
-              <p className="mt-2 text-white">
+              <h3 className="text-xl font-medium text-gray-900">No transactions found</h3>
+              <p className="mt-2 text-gray-600">
                 {filter === 'my-transactions' && !account
                   ? 'Please connect your wallet to view your transactions.'
                   : 'There are no transactions matching your current filter.'}
@@ -216,6 +345,46 @@ const TransactionHistory = () => {
             </div>
           )}
         </>
+      )}
+
+      {/* Debug Section for Local Development */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="mt-8 bg-gray-100 rounded-lg p-4">
+          <h3 className="text-lg font-semibold mb-2">Debug Information</h3>
+          <div className="text-sm space-y-1">
+            <p><strong>Network:</strong> {networkInfo.name}</p>
+            <p><strong>Connected Account:</strong> {account || 'Not connected'}</p>
+            <p><strong>Total Transactions in Memory:</strong> {transactionService.getAllTransactions().length}</p>
+            <p><strong>Current Filter:</strong> {filter}</p>
+            <p><strong>Filtered Results:</strong> {transactions.length}</p>
+            <p><strong>Last Refresh:</strong> {new Date().toLocaleTimeString()}</p>
+          </div>
+          
+          {/* Add test transaction button for development */}
+          <button
+            onClick={() => {
+              const testTx = {
+                txHash: '0x' + Math.random().toString(16).substr(2, 64),
+                data: {
+                  type: 'blockchain-donation',
+                  amountWei: ethers.utils.parseEther('0.1').toString(),
+                  fromAddress: account || '0x1234567890123456789012345678901234567890',
+                  campaignId: '1',
+                  campaignTitle: 'Test Campaign'
+                },
+                status: 'confirmed',
+                timestamp: Date.now()
+              };
+              
+              transactionService.transactions.push(testTx);
+              loadTransactions();
+              if (account) loadUserStats();
+            }}
+            className="mt-2 px-3 py-1 bg-gray-600 text-white rounded text-sm hover:bg-gray-700"
+          >
+            Add Test Transaction
+          </button>
+        </div>
       )}
     </div>
   );

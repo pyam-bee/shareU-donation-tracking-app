@@ -10,7 +10,9 @@ const userSchema = new mongoose.Schema({
   } },
   googleId: { type: String, unique: true, sparse: true },
   profilePicture: { type: String },
-  isAdmin: { type: Boolean, default: false }, // Add admin field
+  isAdmin: { type: Boolean, default: false },
+  isActive: { type: Boolean, default: true }, // Add active status field
+  campaigns: { type: Number, default: 0 }, // Add campaigns count
   createdAt: { type: Date, default: Date.now }
 });
 
