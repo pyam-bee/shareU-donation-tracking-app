@@ -195,7 +195,7 @@ const TransactionHistory = () => {
   const networkInfo = getNetworkInfo();
 
   return (
-    <div className="container mx-auto py-8 px-4">
+    <div className="container mx-auto py-8 px-4 min-h-screen">
       {/* Network indicator */}
       <div className="mb-4 flex justify-between items-center">
         <span className={`text-sm ${networkInfo.color} font-medium`}>

@@ -97,9 +97,6 @@ const Navbar = () => {
             <Link to="/transactions" className="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-white hover:bg-[#00A676]">
               Transactions
             </Link>
-            <Link to="/contact" className="px-3 py-2 rounded-md text-sm font-medium text-white hover:text-white hover:bg-[#00A676]">
-              Contact
-            </Link>
             
             {isLoggedIn ? (
               <>                
@@ -168,7 +165,7 @@ const Navbar = () => {
                         </div>
                       </div>
                       
-                      <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                      {/* <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                         Your Profile
                       </Link>
                       <Link to="/my-campaigns" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
@@ -179,7 +176,7 @@ const Navbar = () => {
                       </Link>
                       <Link to="/settings" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                         Settings
-                      </Link>
+                      </Link> */}
                       <button
                         onClick={handleLogout}
                         className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"

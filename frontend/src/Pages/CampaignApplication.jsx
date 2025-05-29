@@ -1262,7 +1262,7 @@ const CampaignApplication = () => {
   
   // Main component render
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="max-w-4xl mx-auto px-4 py-8 min-h-screen">
       {submitSuccess ? (
         // Show PDF preview after successful submission
         showPdfPreview && pdfData && renderPdfPreview()

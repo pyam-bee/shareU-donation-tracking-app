@@ -7,7 +7,7 @@ class ContractService {
     this.provider = null;
     this.signer = null;
     this.contract = null;
-    this.contractAddress = '0x26D1076554f2cDF1066E7E73fC849e64cdBD6d47';
+    this.contractAddress = '0x24C723Ea466b560fF855A91E94F7E9E766ef2dc3';
     this.initialized = false;
     this.monitoringInterval = null;
   }
